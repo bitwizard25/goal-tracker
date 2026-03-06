@@ -19,7 +19,7 @@ const dailyTaskSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      required: true,
+      default: '',
     },
     due_date: {
       type: Date,
@@ -46,6 +46,10 @@ const dailyTaskSchema = new mongoose.Schema(
       default: 'pending',
     },
     tags: [String],
+    sort_order: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: {
