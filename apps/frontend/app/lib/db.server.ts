@@ -1,27 +1,49 @@
-import dotenv from 'dotenv';
-import path from 'path';
 import mongoose from 'mongoose';
 
-// Load .env from monorepo root (two levels up from apps/frontend)
-dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
-// Also try loading from current working directory
-dotenv.config();
+// Only load dotenv in development
+if (process.env.NODE_ENV !== 'production') {
+    const dotenv = await import('dotenv');
+    const path = await import('path');
+    // Load .env from monorepo root
+    dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+    dotenv.config();
+}
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/goal-tracker';
 
-let isConnected = false;
+// Set up connection pooling for Serverless/Vercel
+let cached = (global as any).mongoose;
+
+if (!cached) {
+    cached = (global as any).mongoose = { conn: null, promise: null };
+}
 
 export const connectDB = async () => {
-    if (isConnected) {
-        return;
+    if (cached.conn) {
+        return cached.conn;
+    }
+
+    if (!cached.promise) {
+        const opts = {
+            bufferCommands: false,
+        };
+
+        cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+            console.log('MongoDB Connected successfully');
+            return mongoose;
+        }).catch((error) => {
+            console.error('MongoDB connection error:', error);
+            cached.promise = null;
+            throw error; // Let the caller know there was an error
+        });
     }
 
     try {
-        const db = await mongoose.connect(MONGODB_URI);
-        isConnected = db.connections[0].readyState === 1;
-        console.log('MongoDB Connected');
-    } catch (error) {
-        console.error('MongoDB connection error:', error);
-        // Don't crash the server — allow retries on next request
+        cached.conn = await cached.promise;
+    } catch (e) {
+        cached.promise = null;
+        throw e;
     }
+
+    return cached.conn;
 };

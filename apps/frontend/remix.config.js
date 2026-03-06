@@ -13,7 +13,5 @@ export default {
   publicPath: '/build/',
   serverBuildPath: 'build/index.js',
   serverModuleFormat: 'esm',
-  serverMainFields: ['module', 'main'],
-  serverMinify: true,
-  serverPlatform: 'neutral',
+  serverPlatform: 'node',
 };
