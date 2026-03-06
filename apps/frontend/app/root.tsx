@@ -6,7 +6,7 @@ import {
   Scripts,
   ScrollRestoration,
 } from '@remix-run/react';
-import stylesheet from '~/styles/globals.css?url';
+import stylesheet from '~/styles/globals.css';
 import { connectDB } from './lib/db.server';
 
 export const links: LinksFunction = () => [
