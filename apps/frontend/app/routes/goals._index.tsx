@@ -1,7 +1,7 @@
 import { useLoaderData, Link } from '@remix-run/react';
 import type { MetaFunction, LoaderFunction } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export const meta: MetaFunction = () => [
   { title: 'Goals - Goal Tracker' },
@@ -59,13 +59,13 @@ const priorityConfig: Record<string, { dot: string; text: string; label: string 
   low:    { dot: 'bg-gray-400',  text: 'text-gray-600',  label: 'Low'    },
 };
 
-function getDaysUntil(dateStr: string | null): { label: string; urgent: boolean } | null {
-  if (!dateStr) return null;
-  const diff = Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (diff < 0)   return { label: 'Overdue',       urgent: true  };
-  if (diff === 0) return { label: 'Due today',      urgent: true  };
-  if (diff <= 7)  return { label: `${diff}d left`,  urgent: true  };
-  return           { label: `${diff}d left`,         urgent: false };
+function getDaysUntil(dateStr: string | null, now: number): { label: string; urgent: boolean } | null {
+  if (!dateStr || !now) return null;
+  const diff = Math.ceil((new Date(dateStr).getTime() - now) / (1000 * 60 * 60 * 24));
+  if (diff < 0)   return { label: 'Overdue',      urgent: true  };
+  if (diff === 0) return { label: 'Due today',     urgent: true  };
+  if (diff <= 7)  return { label: `${diff}d left`, urgent: true  };
+  return           { label: `${diff}d left`,        urgent: false };
 }
 
 function EmptyState({
@@ -94,6 +94,8 @@ function EmptyState({
 export default function GoalsPage() {
   const { longTermGoals, shortTermGoals } = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<'long-term' | 'short-term'>('long-term');
+  const [now, setNow] = useState(0); // 0 = server side, set client-side after hydration
+  useEffect(() => { setNow(Date.now()); }, []);
 
   const totalCompleted =
     longTermGoals.filter((g: any) => g.status === 'completed').length +
@@ -175,7 +177,7 @@ export default function GoalsPage() {
               longTermGoals.map((goal: any) => {
                 const cat = categoryConfig[goal.category] ?? { color: 'text-gray-700', bg: 'bg-gray-100', icon: '📌' };
                 const pri = priorityConfig[goal.priority] ?? priorityConfig.low;
-                const due = getDaysUntil(goal.target_date);
+                const due = getDaysUntil(goal.target_date, now);
                 const prog = Math.min(100, goal.current_progress_percentage ?? 0);
 
                 return (
@@ -262,7 +264,7 @@ export default function GoalsPage() {
                 const done = milestones.filter((m: any) => m.completed).length;
                 const total = milestones.length;
                 const progress = total > 0 ? Math.round((done / total) * 100) : 0;
-                const due = getDaysUntil(goal.end_date);
+                const due = getDaysUntil(goal.end_date, now);
 
                 return (
                   <div

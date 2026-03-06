@@ -381,10 +381,19 @@ function TaskBoard({ tasks }: { tasks: any[] }) {
 }
 
 // ─── MetricSlider ─────────────────────────────────────────────────────────────
-function MetricSlider({ title, icon, value, type, gradientClass }: any) {
+const moodEmojis: [number, string][] = [[2,'😢'],[4,'😕'],[6,'😐'],[8,'😊'],[10,'🤩']];
+const energyEmojis: [number, string][] = [[2,'🪫'],[4,'😴'],[6,'⚡'],[8,'💪'],[10,'🔥']];
+
+function getEmoji(type: string, val: number) {
+  const map = type === 'mood' ? moodEmojis : energyEmojis;
+  return (map.find(([threshold]) => val <= threshold) ?? map[map.length - 1])[1];
+}
+
+function MetricSlider({ title, value, type, gradientClass }: any) {
   const fetcher = useFetcher();
   const [localValue, setLocalValue] = useState(value || 5);
   const isPristine = value === null;
+  const icon = getEmoji(type, localValue);
 
   useEffect(() => {
     if (value !== null) setLocalValue(value);
@@ -513,8 +522,8 @@ export default function DashboardPage() {
         <div className="mt-10">
           <h2 className="text-xl font-extrabold text-gray-900 mb-5">Log Your State</h2>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <MetricSlider title="Energy Level" icon="⚡" value={stats.energy_average} type="energy" gradientClass="from-cyan-400 to-blue-500" />
-            <MetricSlider title="Mood"         icon="😊" value={stats.mood_average}   type="mood"   gradientClass="from-emerald-400 to-green-500" />
+            <MetricSlider title="Energy Level" value={stats.energy_average} type="energy" gradientClass="from-cyan-400 to-blue-500" />
+            <MetricSlider title="Mood"         value={stats.mood_average}   type="mood"   gradientClass="from-emerald-400 to-green-500" />
           </div>
         </div>
 
