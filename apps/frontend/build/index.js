@@ -2011,7 +2011,7 @@ function fmtDate2(iso) {
 }
 var taskGenMessages = [
   "Reading your goal\u2026",
-  "Planning this week's actions\u2026",
+  "Planning actions for the week\u2026",
   "Sizing each task to one day\u2026",
   "Ordering by importance\u2026",
   "Almost done\u2026"
@@ -2132,7 +2132,7 @@ function LongTermGoalDetail() {
         /* @__PURE__ */ jsxs6("div", { className: "bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between", children: [
           /* @__PURE__ */ jsxs6("div", { children: [
             /* @__PURE__ */ jsx7("p", { className: "text-white font-bold text-sm tracking-wide", children: "\u2728 AI Task Cascade" }),
-            /* @__PURE__ */ jsx7("p", { className: "text-indigo-100 text-xs mt-0.5", children: "Generate this week's daily tasks from your goal" })
+            /* @__PURE__ */ jsx7("p", { className: "text-indigo-100 text-xs mt-0.5", children: "Generate daily tasks for the week from your goal" })
           ] }),
           addedCount > 0 && /* @__PURE__ */ jsxs6("span", { className: "rounded-full bg-white/20 px-3 py-1 text-xs font-bold text-white", children: [
             "\u2713 ",
@@ -2236,7 +2236,7 @@ __export(goals_long_term_new_exports, {
   default: () => CreateLongTermGoal,
   meta: () => meta7
 });
-import { useFetcher as useFetcher4, useNavigation as useNavigation3, Form as Form3 } from "@remix-run/react";
+import { useFetcher as useFetcher4, useNavigation as useNavigation3, Form as Form3, useActionData } from "@remix-run/react";
 import { json as json6 } from "@remix-run/node";
 import { useState as useState5, useEffect as useEffect4 } from "react";
 import { Fragment as Fragment2, jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
@@ -2293,7 +2293,7 @@ var thinkingMessages = [
   "Polishing the details\u2026"
 ];
 function CreateLongTermGoal() {
-  let navigation = useNavigation3(), aiFetcher = useFetcher4(), [phase, setPhase] = useState5("idle"), [rawInput, setRawInput] = useState5(""), [msgIdx, setMsgIdx] = useState5(0), [revealStep, setRevealStep] = useState5(0), [activeStep, setActiveStep] = useState5("basic"), [aiError, setAiError] = useState5(""), [fields, setFields] = useState5({
+  let navigation = useNavigation3(), aiFetcher = useFetcher4(), actionData = useActionData(), [phase, setPhase] = useState5("idle"), [rawInput, setRawInput] = useState5(""), [msgIdx, setMsgIdx] = useState5(0), [revealStep, setRevealStep] = useState5(0), [activeStep, setActiveStep] = useState5("basic"), [aiError, setAiError] = useState5(""), [fields, setFields] = useState5({
     title: "",
     description: "",
     target_date: "",
@@ -2395,11 +2395,17 @@ function CreateLongTermGoal() {
         ) })
       ] }),
       phase === "filled" && /* @__PURE__ */ jsxs7(Form3, { method: "post", className: "space-y-4", children: [
+        /* @__PURE__ */ jsx8("input", { type: "hidden", name: "title", value: fields.title }),
+        /* @__PURE__ */ jsx8("input", { type: "hidden", name: "description", value: fields.description }),
+        /* @__PURE__ */ jsx8("input", { type: "hidden", name: "target_date", value: fields.target_date }),
+        /* @__PURE__ */ jsx8("input", { type: "hidden", name: "category", value: fields.category }),
+        /* @__PURE__ */ jsx8("input", { type: "hidden", name: "priority", value: fields.priority }),
         /* @__PURE__ */ jsx8("input", { type: "hidden", name: "specific", value: fields.specific }),
         /* @__PURE__ */ jsx8("input", { type: "hidden", name: "measurable", value: fields.measurable }),
         /* @__PURE__ */ jsx8("input", { type: "hidden", name: "achievable", value: fields.achievable }),
         /* @__PURE__ */ jsx8("input", { type: "hidden", name: "relevant", value: fields.relevant }),
         /* @__PURE__ */ jsx8("input", { type: "hidden", name: "time_bound", value: fields.time_bound }),
+        actionData?.error && /* @__PURE__ */ jsx8("div", { className: "rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-600", children: actionData.error }),
         /* @__PURE__ */ jsx8("div", { className: "flex gap-3", children: ["basic", "smart"].map((s) => /* @__PURE__ */ jsx8(
           "button",
           {
@@ -2413,20 +2419,20 @@ function CreateLongTermGoal() {
         activeStep === "basic" && /* @__PURE__ */ jsxs7("div", { className: "rounded-2xl bg-white border border-gray-100 shadow-sm p-6 space-y-5", children: [
           /* @__PURE__ */ jsxs7("div", { className: fieldClass(0), children: [
             /* @__PURE__ */ jsx8("label", { className: labelClass, children: "Goal Title *" }),
-            /* @__PURE__ */ jsx8("input", { type: "text", name: "title", required: !0, value: fields.title, onChange: set("title"), className: inputClass, placeholder: "e.g., Run a half marathon" })
+            /* @__PURE__ */ jsx8("input", { type: "text", value: fields.title, onChange: set("title"), className: inputClass, placeholder: "e.g., Run a half marathon" })
           ] }),
           /* @__PURE__ */ jsxs7("div", { className: fieldClass(1), children: [
             /* @__PURE__ */ jsx8("label", { className: labelClass, children: "Description *" }),
-            /* @__PURE__ */ jsx8("textarea", { name: "description", required: !0, rows: 3, value: fields.description, onChange: set("description"), className: inputClass + " resize-none", placeholder: "Describe your goal\u2026" })
+            /* @__PURE__ */ jsx8("textarea", { rows: 3, value: fields.description, onChange: set("description"), className: inputClass + " resize-none", placeholder: "Describe your goal\u2026" })
           ] }),
           /* @__PURE__ */ jsxs7("div", { className: `grid grid-cols-1 gap-5 md:grid-cols-3 ${fieldClass(2)}`, children: [
             /* @__PURE__ */ jsxs7("div", { children: [
               /* @__PURE__ */ jsx8("label", { className: labelClass, children: "Target Date *" }),
-              /* @__PURE__ */ jsx8("input", { type: "date", name: "target_date", required: !0, value: fields.target_date, onChange: set("target_date"), className: inputClass })
+              /* @__PURE__ */ jsx8("input", { type: "date", value: fields.target_date, onChange: set("target_date"), className: inputClass })
             ] }),
             /* @__PURE__ */ jsxs7("div", { children: [
               /* @__PURE__ */ jsx8("label", { className: labelClass, children: "Category *" }),
-              /* @__PURE__ */ jsxs7("select", { name: "category", required: !0, value: fields.category, onChange: set("category"), className: inputClass, children: [
+              /* @__PURE__ */ jsxs7("select", { value: fields.category, onChange: set("category"), className: inputClass, children: [
                 /* @__PURE__ */ jsx8("option", { value: "", children: "Select a category" }),
                 /* @__PURE__ */ jsx8("option", { value: "health", children: "Health & Fitness" }),
                 /* @__PURE__ */ jsx8("option", { value: "career", children: "Career" }),
@@ -2438,7 +2444,7 @@ function CreateLongTermGoal() {
             ] }),
             /* @__PURE__ */ jsxs7("div", { children: [
               /* @__PURE__ */ jsx8("label", { className: labelClass, children: "Priority" }),
-              /* @__PURE__ */ jsxs7("select", { name: "priority", value: fields.priority, onChange: set("priority"), className: inputClass, children: [
+              /* @__PURE__ */ jsxs7("select", { value: fields.priority, onChange: set("priority"), className: inputClass, children: [
                 /* @__PURE__ */ jsx8("option", { value: "low", children: "Low" }),
                 /* @__PURE__ */ jsx8("option", { value: "medium", children: "Medium" }),
                 /* @__PURE__ */ jsx8("option", { value: "high", children: "High" })
@@ -3349,7 +3355,7 @@ __export(auth_register_exports, {
   default: () => RegisterPage,
   meta: () => meta10
 });
-import { Form as Form4, Link as Link4, useActionData, useNavigation as useNavigation4 } from "@remix-run/react";
+import { Form as Form4, Link as Link4, useActionData as useActionData2, useNavigation as useNavigation4 } from "@remix-run/react";
 import { useState as useState7 } from "react";
 import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
 var meta10 = () => [
@@ -3392,7 +3398,7 @@ var meta10 = () => [
   }
 };
 function RegisterPage() {
-  let actionData = useActionData(), navigation = useNavigation4(), [showPassword, setShowPassword] = useState7(!1), [showConfirm, setShowConfirm] = useState7(!1), isLoading = navigation.state === "submitting";
+  let actionData = useActionData2(), navigation = useNavigation4(), [showPassword, setShowPassword] = useState7(!1), [showConfirm, setShowConfirm] = useState7(!1), isLoading = navigation.state === "submitting";
   return /* @__PURE__ */ jsxs10("div", { className: "flex min-h-screen", children: [
     /* @__PURE__ */ jsxs10("div", { className: "hidden lg:flex lg:w-1/2 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 relative overflow-hidden", children: [
       /* @__PURE__ */ jsxs10("div", { className: "absolute inset-0", children: [
@@ -3957,7 +3963,7 @@ __export(auth_login_exports, {
   default: () => LoginPage,
   meta: () => meta12
 });
-import { Form as Form5, Link as Link6, useActionData as useActionData2, useNavigation as useNavigation5 } from "@remix-run/react";
+import { Form as Form5, Link as Link6, useActionData as useActionData3, useNavigation as useNavigation5 } from "@remix-run/react";
 import { useState as useState9 } from "react";
 import { jsx as jsx13, jsxs as jsxs12 } from "react/jsx-runtime";
 var meta12 = () => [
@@ -3980,7 +3986,7 @@ var meta12 = () => [
   }
 };
 function LoginPage() {
-  let actionData = useActionData2(), navigation = useNavigation5(), [showPassword, setShowPassword] = useState9(!1), isLoading = navigation.state === "submitting";
+  let actionData = useActionData3(), navigation = useNavigation5(), [showPassword, setShowPassword] = useState9(!1), isLoading = navigation.state === "submitting";
   return /* @__PURE__ */ jsxs12("div", { className: "flex min-h-screen", children: [
     /* @__PURE__ */ jsxs12("div", { className: "hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 relative overflow-hidden", children: [
       /* @__PURE__ */ jsxs12("div", { className: "absolute inset-0", children: [
@@ -4743,7 +4749,7 @@ function AuthLayout() {
 }
 
 // server-assets-manifest:@remix-run/dev/assets-manifest
-var assets_manifest_default = { entry: { module: "/build/entry.client-RJQYT24D.js", imports: ["/build/_shared/chunk-AOAPHHAE.js", "/build/_shared/chunk-2QEWK57A.js"] }, routes: { root: { id: "root", parentId: void 0, path: "", index: void 0, caseSensitive: void 0, module: "/build/root-3I4S7LRH.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/_index": { id: "routes/_index", parentId: "root", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/_index-SVOKK25M.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/analytics._index": { id: "routes/analytics._index", parentId: "root", path: "analytics", index: !0, caseSensitive: void 0, module: "/build/routes/analytics._index-RPUKT4FZ.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.daily-brief": { id: "routes/api.daily-brief", parentId: "root", path: "api/daily-brief", index: void 0, caseSensitive: void 0, module: "/build/routes/api.daily-brief-DEQSSRGU.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.generate-goal": { id: "routes/api.generate-goal", parentId: "root", path: "api/generate-goal", index: void 0, caseSensitive: void 0, module: "/build/routes/api.generate-goal-PMPLF5CY.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.generate-goal-tasks": { id: "routes/api.generate-goal-tasks", parentId: "root", path: "api/generate-goal-tasks", index: void 0, caseSensitive: void 0, module: "/build/routes/api.generate-goal-tasks-YQZWNWCQ.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.generate-task": { id: "routes/api.generate-task", parentId: "root", path: "api/generate-task", index: void 0, caseSensitive: void 0, module: "/build/routes/api.generate-task-FH732ANY.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth": { id: "routes/auth", parentId: "root", path: "auth", index: void 0, caseSensitive: void 0, module: "/build/routes/auth-75I6IVAL.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.login": { id: "routes/auth.login", parentId: "routes/auth", path: "login", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.login-TXYHVVEK.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.logout": { id: "routes/auth.logout", parentId: "routes/auth", path: "logout", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.logout-RT7NNDUM.js", imports: void 0, hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.register": { id: "routes/auth.register", parentId: "routes/auth", path: "register", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.register-OAHWLT7K.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard": { id: "routes/dashboard", parentId: "root", path: "dashboard", index: void 0, caseSensitive: void 0, module: "/build/routes/dashboard-GSZCCETF.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard._index": { id: "routes/dashboard._index", parentId: "routes/dashboard", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/dashboard._index-HLBWAJJL.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/gamification._index": { id: "routes/gamification._index", parentId: "root", path: "gamification", index: !0, caseSensitive: void 0, module: "/build/routes/gamification._index-OPVFVPYJ.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals._index": { id: "routes/goals._index", parentId: "root", path: "goals", index: !0, caseSensitive: void 0, module: "/build/routes/goals._index-SNXWHFIP.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.long-term.$id": { id: "routes/goals.long-term.$id", parentId: "root", path: "goals/long-term/:id", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.long-term.$id-YPLR34JT.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.long-term.new": { id: "routes/goals.long-term.new", parentId: "root", path: "goals/long-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.long-term.new-SDH2WMLM.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.short-term.$id": { id: "routes/goals.short-term.$id", parentId: "root", path: "goals/short-term/:id", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.short-term.$id-FR5DTBNR.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.short-term.new": { id: "routes/goals.short-term.new", parentId: "root", path: "goals/short-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.short-term.new-6M4GRSID.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/tasks.complete.$taskId": { id: "routes/tasks.complete.$taskId", parentId: "root", path: "tasks/complete/:taskId", index: void 0, caseSensitive: void 0, module: "/build/routes/tasks.complete.$taskId-3IUJE7KO.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/tasks.new": { id: "routes/tasks.new", parentId: "root", path: "tasks/new", index: void 0, caseSensitive: void 0, module: "/build/routes/tasks.new-KF2X4BVB.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 } }, version: "852cc922", hmr: void 0, url: "/build/manifest-852CC922.js" };
+var assets_manifest_default = { entry: { module: "/build/entry.client-RJQYT24D.js", imports: ["/build/_shared/chunk-AOAPHHAE.js", "/build/_shared/chunk-2QEWK57A.js"] }, routes: { root: { id: "root", parentId: void 0, path: "", index: void 0, caseSensitive: void 0, module: "/build/root-3I4S7LRH.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/_index": { id: "routes/_index", parentId: "root", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/_index-SVOKK25M.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/analytics._index": { id: "routes/analytics._index", parentId: "root", path: "analytics", index: !0, caseSensitive: void 0, module: "/build/routes/analytics._index-RPUKT4FZ.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.daily-brief": { id: "routes/api.daily-brief", parentId: "root", path: "api/daily-brief", index: void 0, caseSensitive: void 0, module: "/build/routes/api.daily-brief-DEQSSRGU.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.generate-goal": { id: "routes/api.generate-goal", parentId: "root", path: "api/generate-goal", index: void 0, caseSensitive: void 0, module: "/build/routes/api.generate-goal-PMPLF5CY.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.generate-goal-tasks": { id: "routes/api.generate-goal-tasks", parentId: "root", path: "api/generate-goal-tasks", index: void 0, caseSensitive: void 0, module: "/build/routes/api.generate-goal-tasks-YQZWNWCQ.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.generate-task": { id: "routes/api.generate-task", parentId: "root", path: "api/generate-task", index: void 0, caseSensitive: void 0, module: "/build/routes/api.generate-task-FH732ANY.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth": { id: "routes/auth", parentId: "root", path: "auth", index: void 0, caseSensitive: void 0, module: "/build/routes/auth-75I6IVAL.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.login": { id: "routes/auth.login", parentId: "routes/auth", path: "login", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.login-TXYHVVEK.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.logout": { id: "routes/auth.logout", parentId: "routes/auth", path: "logout", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.logout-RT7NNDUM.js", imports: void 0, hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.register": { id: "routes/auth.register", parentId: "routes/auth", path: "register", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.register-OAHWLT7K.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard": { id: "routes/dashboard", parentId: "root", path: "dashboard", index: void 0, caseSensitive: void 0, module: "/build/routes/dashboard-GSZCCETF.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard._index": { id: "routes/dashboard._index", parentId: "routes/dashboard", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/dashboard._index-HLBWAJJL.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/gamification._index": { id: "routes/gamification._index", parentId: "root", path: "gamification", index: !0, caseSensitive: void 0, module: "/build/routes/gamification._index-OPVFVPYJ.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals._index": { id: "routes/goals._index", parentId: "root", path: "goals", index: !0, caseSensitive: void 0, module: "/build/routes/goals._index-SNXWHFIP.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.long-term.$id": { id: "routes/goals.long-term.$id", parentId: "root", path: "goals/long-term/:id", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.long-term.$id-WO7D2QUD.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.long-term.new": { id: "routes/goals.long-term.new", parentId: "root", path: "goals/long-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.long-term.new-C7ENCHCK.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.short-term.$id": { id: "routes/goals.short-term.$id", parentId: "root", path: "goals/short-term/:id", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.short-term.$id-FR5DTBNR.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.short-term.new": { id: "routes/goals.short-term.new", parentId: "root", path: "goals/short-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.short-term.new-6M4GRSID.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/tasks.complete.$taskId": { id: "routes/tasks.complete.$taskId", parentId: "root", path: "tasks/complete/:taskId", index: void 0, caseSensitive: void 0, module: "/build/routes/tasks.complete.$taskId-3IUJE7KO.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/tasks.new": { id: "routes/tasks.new", parentId: "root", path: "tasks/new", index: void 0, caseSensitive: void 0, module: "/build/routes/tasks.new-KF2X4BVB.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 } }, version: "1ba0f8f3", hmr: void 0, url: "/build/manifest-1BA0F8F3.js" };
 
 // server-entry-module:@remix-run/dev/server-build
 var mode = "production", assetsBuildDirectory = "public/build", future = { v3_fetcherPersist: !0, v3_relativeSplatPath: !0, v3_throwAbortReason: !0, v3_routeConfig: !1, v3_singleFetch: !1, v3_lazyRouteDiscovery: !1, unstable_optimizeDeps: !1 }, publicPath = "/build/", entry = { module: entry_server_exports }, routes = {

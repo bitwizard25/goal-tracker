@@ -1,4 +1,4 @@
-import { useFetcher, useNavigation, Form } from '@remix-run/react';
+import { useFetcher, useNavigation, Form, useActionData } from '@remix-run/react';
 import { json, type MetaFunction, type ActionFunction } from '@remix-run/node';
 import { useState, useEffect } from 'react';
 
@@ -85,6 +85,7 @@ const thinkingMessages = [
 export default function CreateLongTermGoal() {
   const navigation = useNavigation();
   const aiFetcher = useFetcher<any>();
+  const actionData = useActionData<any>();
 
   const [phase, setPhase] = useState<'idle' | 'thinking' | 'filled'>('idle');
   const [rawInput, setRawInput] = useState('');
@@ -237,12 +238,26 @@ export default function CreateLongTermGoal() {
         {/* ── Form (shown when filled) ───────────────────────────────────── */}
         {phase === 'filled' && (
           <Form method="post" className="space-y-4">
+            {/* Hidden fields for ALL state to ensure submission works regardless of active step */}
+            <input type="hidden" name="title" value={fields.title} />
+            <input type="hidden" name="description" value={fields.description} />
+            <input type="hidden" name="target_date" value={fields.target_date} />
+            <input type="hidden" name="category" value={fields.category} />
+            <input type="hidden" name="priority" value={fields.priority} />
+
             {/* Hidden fields for SMART */}
-            <input type="hidden" name="specific"   value={fields.specific} />
+            <input type="hidden" name="specific" value={fields.specific} />
             <input type="hidden" name="measurable" value={fields.measurable} />
             <input type="hidden" name="achievable" value={fields.achievable} />
-            <input type="hidden" name="relevant"   value={fields.relevant} />
+            <input type="hidden" name="relevant" value={fields.relevant} />
             <input type="hidden" name="time_bound" value={fields.time_bound} />
+
+            {/* Error display if missing fields */}
+            {actionData?.error && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-600">
+                {actionData.error}
+              </div>
+            )}
 
             {/* Step tabs */}
             <div className="flex gap-3">
@@ -251,11 +266,10 @@ export default function CreateLongTermGoal() {
                   key={s}
                   type="button"
                   onClick={() => setActiveStep(s)}
-                  className={`px-5 py-2 rounded-xl font-semibold text-sm transition ${
-                    activeStep === s
+                  className={`px-5 py-2 rounded-xl font-semibold text-sm transition ${activeStep === s
                       ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow'
                       : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   {s === 'basic' ? '📋 Basic Info' : '🎯 SMART Framework'}
                 </button>
@@ -267,23 +281,23 @@ export default function CreateLongTermGoal() {
               <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-6 space-y-5">
                 <div className={fieldClass(0)}>
                   <label className={labelClass}>Goal Title *</label>
-                  <input type="text" name="title" required value={fields.title} onChange={set('title')} className={inputClass} placeholder="e.g., Run a half marathon" />
+                  <input type="text" value={fields.title} onChange={set('title')} className={inputClass} placeholder="e.g., Run a half marathon" />
                 </div>
 
                 <div className={fieldClass(1)}>
                   <label className={labelClass}>Description *</label>
-                  <textarea name="description" required rows={3} value={fields.description} onChange={set('description')} className={inputClass + ' resize-none'} placeholder="Describe your goal…" />
+                  <textarea rows={3} value={fields.description} onChange={set('description')} className={inputClass + ' resize-none'} placeholder="Describe your goal…" />
                 </div>
 
                 <div className={`grid grid-cols-1 gap-5 md:grid-cols-3 ${fieldClass(2)}`}>
                   <div>
                     <label className={labelClass}>Target Date *</label>
-                    <input type="date" name="target_date" required value={fields.target_date} onChange={set('target_date')} className={inputClass} />
+                    <input type="date" value={fields.target_date} onChange={set('target_date')} className={inputClass} />
                   </div>
 
                   <div>
                     <label className={labelClass}>Category *</label>
-                    <select name="category" required value={fields.category} onChange={set('category')} className={inputClass}>
+                    <select value={fields.category} onChange={set('category')} className={inputClass}>
                       <option value="">Select a category</option>
                       <option value="health">Health &amp; Fitness</option>
                       <option value="career">Career</option>
@@ -296,7 +310,7 @@ export default function CreateLongTermGoal() {
 
                   <div>
                     <label className={labelClass}>Priority</label>
-                    <select name="priority" value={fields.priority} onChange={set('priority')} className={inputClass}>
+                    <select value={fields.priority} onChange={set('priority')} className={inputClass}>
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
                       <option value="high">High</option>
@@ -324,11 +338,11 @@ export default function CreateLongTermGoal() {
                 </div>
 
                 {[
-                  { key: 'specific',   label: 'Specific',   desc: 'What exactly will you achieve?',  emoji: '🎯', step: 4 },
-                  { key: 'measurable', label: 'Measurable', desc: 'How will you track progress?',     emoji: '📏', step: 5 },
-                  { key: 'achievable', label: 'Achievable', desc: 'Why is this realistic?',           emoji: '💪', step: 6 },
-                  { key: 'relevant',   label: 'Relevant',   desc: 'Why does this matter to you?',     emoji: '❤️', step: 7 },
-                  { key: 'time_bound', label: 'Time-bound', desc: 'What is your timeline?',           emoji: '⏰', step: 8 },
+                  { key: 'specific', label: 'Specific', desc: 'What exactly will you achieve?', emoji: '🎯', step: 4 },
+                  { key: 'measurable', label: 'Measurable', desc: 'How will you track progress?', emoji: '📏', step: 5 },
+                  { key: 'achievable', label: 'Achievable', desc: 'Why is this realistic?', emoji: '💪', step: 6 },
+                  { key: 'relevant', label: 'Relevant', desc: 'Why does this matter to you?', emoji: '❤️', step: 7 },
+                  { key: 'time_bound', label: 'Time-bound', desc: 'What is your timeline?', emoji: '⏰', step: 8 },
                 ].map(({ key, label, desc, emoji, step }) => (
                   <div key={key} className={fieldClass(step)}>
                     <label className={labelClass}>
