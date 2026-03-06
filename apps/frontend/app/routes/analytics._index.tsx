@@ -1,260 +1,283 @@
 import { useLoaderData } from '@remix-run/react';
 import type { MetaFunction, LoaderFunction } from '@remix-run/node';
+import { json } from '@remix-run/node';
 
 export const meta: MetaFunction = () => [
   { title: 'Analytics - Goal Tracker' },
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
+  const { connectDB } = await import('../lib/db.server');
   const { requireUserId } = await import('../services/auth.server');
   const { DailyTask } = await import('../models/Tasks');
   const { User } = await import('../models/User');
+  const { UserStats } = await import('../models/Analytics');
 
+  await connectDB();
   const userId = await requireUserId(request);
 
-  // Calculate date ranges
   const now = new Date();
-
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay());
   startOfWeek.setHours(0, 0, 0, 0);
-
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  startOfMonth.setHours(0, 0, 0, 0);
 
-  // Fetch basic user context
   const user: any = await User.findById(userId).lean();
 
-  // Aggregate Tasks for this week
-  const weekTasks = await DailyTask.find({
-    user_id: userId,
-    created_at: { $gte: startOfWeek }
-  }).lean();
+  const [weekTasks, monthTasks, totalCompleted, weekStats] = await Promise.all([
+    DailyTask.find({ user_id: userId, created_at: { $gte: startOfWeek } }).lean(),
+    DailyTask.find({ user_id: userId, created_at: { $gte: startOfMonth } }).lean(),
+    DailyTask.countDocuments({ user_id: userId, status: 'completed' }),
+    UserStats.find({ user_id: userId, date: { $gte: startOfWeek } }).sort({ date: 1 }).lean(),
+  ]);
 
-  const weekTasksCompleted = weekTasks.filter(t => t.status === 'completed');
+  const weekCompleted = (weekTasks as any[]).filter((t) => t.status === 'completed');
+  const monthCompleted = (monthTasks as any[]).filter((t) => t.status === 'completed');
 
-  // Aggregate Tasks for this month
-  const monthTasks = await DailyTask.find({
-    user_id: userId,
-    created_at: { $gte: startOfMonth }
-  }).lean();
+  const moodEntries = (weekStats as any[]).filter((d) => d.mood_average != null);
+  const energyEntries = (weekStats as any[]).filter((d) => d.energy_average != null);
+  const avgMood = moodEntries.length > 0
+    ? moodEntries.reduce((s, d) => s + d.mood_average, 0) / moodEntries.length : 0;
+  const avgEnergy = energyEntries.length > 0
+    ? energyEntries.reduce((s, d) => s + d.energy_average, 0) / energyEntries.length : 0;
 
-  const monthTasksCompleted = monthTasks.filter(t => t.status === 'completed');
-
-  // Total all-time stats
-  const totalTasksCompleted = await DailyTask.countDocuments({
-    user_id: userId,
-    status: 'completed'
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dailyData = days.map((day, i) => {
+    const dayStart = new Date(startOfWeek);
+    dayStart.setDate(startOfWeek.getDate() + i);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+    const dayTasks = (weekTasks as any[]).filter((t) => {
+      const d = new Date(t.created_at);
+      return d >= dayStart && d <= dayEnd;
+    });
+    const stat = (weekStats as any[]).find((s) => {
+      const d = new Date(s.date);
+      return d >= dayStart && d <= dayEnd;
+    });
+    return {
+      date: day,
+      tasks: dayTasks.filter((t) => t.status === 'completed').length,
+      total: dayTasks.length,
+      mood: stat?.mood_average ?? 0,
+      energy: stat?.energy_average ?? 0,
+    };
   });
 
-  return {
+  const categoryMap: Record<string, number> = {};
+  (weekTasks as any[]).forEach((t) => {
+    const cat = t.category ?? 'general';
+    categoryMap[cat] = (categoryMap[cat] ?? 0) + 1;
+  });
+  const catTotal = Object.values(categoryMap).reduce((a, b) => a + b, 0) || 1;
+  const categoryBreakdown = Object.entries(categoryMap)
+    .map(([category, count]) => ({ category, count, percentage: Math.round((count / catTotal) * 100) }))
+    .sort((a, b) => b.count - a.count);
+
+  return json({
     stats: {
-      thisWeek: {
-        tasksCompleted: weekTasksCompleted.length,
-        tasksTotal: weekTasks.length,
-        averageMood: 7.0, // Needs UserStats tracking implementation
-        averageEnergy: 7.0,
-        flowStateSessions: 0, // Mocked for now until Analytics is fully hooked up
-        totalPoints: user?.total_points || 0, // Roughly speaking
+      week: {
+        completed: weekCompleted.length,
+        total: weekTasks.length,
+        avgMood: Number(avgMood.toFixed(1)),
+        avgEnergy: Number(avgEnergy.toFixed(1)),
       },
-      thisMonth: {
-        tasksCompleted: monthTasksCompleted.length,
-        tasksTotal: monthTasks.length,
-        averageMood: 6.9,
-        averageEnergy: 6.6,
-        flowStateSessions: 0,
-        totalPoints: user?.total_points || 0,
-      },
+      month: { completed: monthCompleted.length, total: monthTasks.length },
       allTime: {
-        tasksCompleted: totalTasksCompleted,
-        goalsCompleted: 0, // Mocked 
-        streakBest: user?.current_streak || 0,
-        totalPoints: user?.total_points || 0,
+        completed: totalCompleted,
+        points: user?.total_points ?? 0,
+        streak: user?.streak_count ?? 0,
+        level: user?.current_level ?? 1,
       },
     },
-    // Keep daily data and insights mocked for now as a placeholder 
-    // real implementation requires more complex Mongoose aggregations
-    dailyData: [
-      { date: 'Mon', tasks: 5, mood: 6, energy: 6 },
-      { date: 'Tue', tasks: 6, mood: 7, energy: 7 },
-      { date: 'Wed', tasks: 4, mood: 5, energy: 5 },
-      { date: 'Thu', tasks: 7, mood: 8, energy: 7 },
-      { date: 'Fri', tasks: 6, mood: 8, energy: 8 },
-      { date: 'Sat', tasks: 3, mood: 7, energy: 6 },
-      { date: 'Sun', tasks: 2, mood: 6, energy: 5 },
-    ],
-    categoryBreakdown: [
-      { category: 'Health', count: 45, percentage: 25 },
-      { category: 'Career', count: 60, percentage: 33 },
-      { category: 'Personal', count: 48, percentage: 27 },
-      { category: 'Education', count: 27, percentage: 15 },
-    ],
-    insights: [
-      {
-        type: 'neutral',
-        text: 'Keep tracking your tasks to see personalized insights about your productivity.',
-      },
-    ],
-  };
+    dailyData,
+    categoryBreakdown: categoryBreakdown.length > 0 ? categoryBreakdown : [],
+  });
 };
 
+const categoryColors: Record<string, string> = {
+  health: 'bg-emerald-500', career: 'bg-blue-500', personal: 'bg-purple-500',
+  education: 'bg-amber-500', finance: 'bg-green-500', relationships: 'bg-rose-500', general: 'bg-gray-400',
+};
+
+function StatCard({ label, value, sub, icon, bg }: {
+  label: string; value: string | number; sub?: string; icon: string; bg: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all duration-300">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</p>
+        <div className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg ${bg}`}>{icon}</div>
+      </div>
+      <p className="mt-3 text-3xl font-extrabold text-gray-900">{value}</p>
+      {sub && <p className="mt-1 text-xs font-medium text-gray-500">{sub}</p>}
+    </div>
+  );
+}
+
 export default function AnalyticsPage() {
-  const data = useLoaderData<typeof loader>();
-  const { stats, dailyData, categoryBreakdown, insights } = data;
+  const { stats, dailyData, categoryBreakdown } = useLoaderData<typeof loader>();
+
+  const weekRate = stats.week.total > 0
+    ? Math.round((stats.week.completed / stats.week.total) * 100) : 0;
+  const monthRate = stats.month.total > 0
+    ? Math.round((stats.month.completed / stats.month.total) * 100) : 0;
+  const maxTasks = Math.max(...dailyData.map((d: any) => d.total), 1);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="mt-1 text-sm text-gray-600">Insights into your goal-setting progress</p>
+    <div className="min-h-screen bg-gray-50/30">
+      <div className="border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <div className="mx-auto max-w-5xl px-6 py-5">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+            Analytics
+          </h1>
+          <p className="mt-0.5 text-sm text-gray-500">Your productivity insights at a glance</p>
         </div>
-      </header>
+      </div>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* This Week Stats */}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">This Week</h2>
-          <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-600">Tasks Completed</p>
-              <p className="mt-1 text-2xl font-bold text-blue-600">
-                {stats.thisWeek.tasksCompleted}/{stats.thisWeek.tasksTotal}
-              </p>
-              <p className="mt-1 text-xs text-gray-500">
-                {Math.round((stats.thisWeek.tasksCompleted / stats.thisWeek.tasksTotal) * 100)}%
-              </p>
-            </div>
+      <div className="mx-auto max-w-5xl px-6 py-8 pb-28 lg:pb-8 space-y-8">
 
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-600">Avg Mood</p>
-              <p className="mt-1 text-2xl font-bold text-green-600">{stats.thisWeek.averageMood.toFixed(1)}</p>
-              <p className="mt-1 text-xs text-gray-500">/10</p>
-            </div>
+        {/* KPI Row */}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <StatCard label="This Week"   value={`${stats.week.completed}/${stats.week.total}`}   sub={`${weekRate}% completion`}  icon="✅" bg="bg-blue-50 text-blue-600"    />
+          <StatCard label="This Month"  value={`${stats.month.completed}/${stats.month.total}`} sub={`${monthRate}% completion`} icon="📅" bg="bg-indigo-50 text-indigo-600" />
+          <StatCard label="Avg Mood"    value={stats.week.avgMood > 0 ? `${stats.week.avgMood}/10` : '—'}   sub="this week" icon="😊" bg="bg-emerald-50 text-emerald-600" />
+          <StatCard label="Avg Energy"  value={stats.week.avgEnergy > 0 ? `${stats.week.avgEnergy}/10` : '—'} sub="this week" icon="⚡" bg="bg-amber-50 text-amber-600"   />
+        </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-600">Avg Energy</p>
-              <p className="mt-1 text-2xl font-bold text-purple-600">{stats.thisWeek.averageEnergy.toFixed(1)}</p>
-              <p className="mt-1 text-xs text-gray-500">/10</p>
+        {/* Weekly Bar Chart */}
+        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Weekly Activity</h2>
+              <p className="text-sm text-gray-500">Completed tasks per day</p>
             </div>
+            <div className="flex items-center gap-4 text-xs font-semibold text-gray-500">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" />Done</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-gray-200" />Total</span>
+            </div>
+          </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-600">Flow States</p>
-              <p className="mt-1 text-2xl font-bold text-cyan-600">{stats.thisWeek.flowStateSessions}</p>
-              <p className="mt-1 text-xs text-gray-500">sessions</p>
-            </div>
+          <div className="flex items-end gap-2 h-36">
+            {dailyData.map((day: any) => (
+              <div key={day.date} className="flex-1 flex flex-col items-center gap-1.5">
+                <div className="relative w-full rounded-lg overflow-hidden" style={{ height: '100px' }}>
+                  <div className="absolute inset-0 bg-gray-100 rounded-lg" />
+                  {day.total > 0 && (
+                    <div
+                      className="absolute bottom-0 left-0 right-0 bg-gray-200 rounded-lg"
+                      style={{ height: `${(day.total / maxTasks) * 100}%` }}
+                    />
+                  )}
+                  {day.tasks > 0 && (
+                    <div
+                      className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-blue-600 to-blue-400 rounded-lg"
+                      style={{ height: `${(day.tasks / maxTasks) * 100}%` }}
+                    />
+                  )}
+                  {day.tasks > 0 && (
+                    <span className="absolute inset-0 flex items-end justify-center pb-1.5 text-xs font-bold text-white z-10">
+                      {day.tasks}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-gray-500">{day.date}</span>
+              </div>
+            ))}
+          </div>
 
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-600">Points Earned</p>
-              <p className="mt-1 text-2xl font-bold text-yellow-600">{stats.thisWeek.totalPoints}</p>
-              <p className="mt-1 text-xs text-gray-500">this week</p>
-            </div>
-
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="text-xs text-gray-600">This Month</p>
-              <p className="mt-1 text-2xl font-bold text-orange-600">{stats.thisMonth.totalPoints}</p>
-              <p className="mt-1 text-xs text-gray-500">points</p>
-            </div>
+          {/* Mood/energy mini row */}
+          <div className="mt-5 pt-4 border-t border-gray-100 grid grid-cols-7 gap-2">
+            {dailyData.map((day: any) => (
+              <div key={`${day.date}-metrics`} className="flex flex-col items-center gap-1">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                  day.mood > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'
+                }`}>
+                  {day.mood > 0 ? day.mood : '—'}
+                </div>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                  day.energy > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-400'
+                }`}>
+                  {day.energy > 0 ? day.energy : '—'}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex justify-center gap-6 text-xs text-gray-400 font-medium">
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-400" />Mood</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" />Energy</span>
           </div>
         </div>
 
-        {/* Daily Activity Chart */}
-        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Weekly Overview</h2>
-          <div className="mt-6">
-            <div className="space-y-4">
-              {dailyData.map((day: any) => (
-                <div key={day.date}>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-gray-600">{day.date}</span>
-                    <span className="font-medium text-gray-900">{day.tasks} tasks</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <div className="h-2 rounded-full bg-gray-200">
+        {/* All-time + Category */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+          <div className="lg:col-span-2 rounded-2xl bg-gradient-to-br from-gray-900 via-blue-950 to-indigo-950 p-6 text-white shadow-xl">
+            <p className="text-xs font-bold uppercase tracking-widest text-blue-300 mb-5">All-Time Stats</p>
+            <div className="grid grid-cols-2 gap-5">
+              {[
+                { label: 'Tasks Done',    value: stats.allTime.completed,              suffix: '' },
+                { label: 'Total Points',  value: stats.allTime.points.toLocaleString(), suffix: '' },
+                { label: 'Streak',        value: stats.allTime.streak,                 suffix: ' 🔥' },
+                { label: 'Level',         value: stats.allTime.level,                  suffix: ' ⭐' },
+              ].map((item) => (
+                <div key={item.label}>
+                  <p className="text-xs font-semibold text-blue-300/70">{item.label}</p>
+                  <p className="mt-1 text-3xl font-extrabold">{item.value}{item.suffix}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="lg:col-span-3 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-5">Tasks by Category</h2>
+            {categoryBreakdown.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">Complete tasks to see breakdown</p>
+            ) : (
+              <div className="space-y-4">
+                {categoryBreakdown.slice(0, 5).map((cat: any) => (
+                  <div key={cat.category}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-semibold capitalize text-gray-700">{cat.category}</span>
+                      <span className="text-sm font-bold text-gray-900">
+                        {cat.count} <span className="text-gray-400 font-normal">tasks</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-blue-600"
-                          style={{ width: `${(day.tasks / 7) * 100}%` }}
+                          className={`h-full rounded-full ${categoryColors[cat.category] ?? 'bg-gray-400'} transition-all duration-700`}
+                          style={{ width: `${cat.percentage}%` }}
                         />
                       </div>
-                    </div>
-                    <div className="w-16 text-xs">
-                      <span className="text-gray-600">😐 {day.mood} 💪 {day.energy}</span>
+                      <span className="text-xs font-bold text-gray-500 w-8 text-right">{cat.percentage}%</span>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Insight Card */}
+        <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
+          <div className="flex items-start gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white text-lg">💡</div>
+            <div>
+              <p className="font-semibold text-blue-900">Weekly Insight</p>
+              {stats.week.completed === 0 ? (
+                <p className="mt-1 text-sm text-blue-800/80">Start completing tasks today to unlock personalized productivity insights.</p>
+              ) : weekRate >= 80 ? (
+                <p className="mt-1 text-sm text-blue-800/80">Excellent week! You completed {weekRate}% of your tasks. Maintain this momentum.</p>
+              ) : weekRate >= 50 ? (
+                <p className="mt-1 text-sm text-blue-800/80">Good progress — {stats.week.completed} tasks done. Push through the remaining {stats.week.total - stats.week.completed} to hit your target.</p>
+              ) : (
+                <p className="mt-1 text-sm text-blue-800/80">You're at {weekRate}% this week. Try breaking tasks into smaller steps to build momentum.</p>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Category Breakdown */}
-        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2">
-            <h2 className="text-lg font-semibold text-gray-900">Tasks by Category</h2>
-            <div className="mt-6 space-y-4">
-              {categoryBreakdown.map((cat: any) => (
-                <div key={cat.category}>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-gray-700">{cat.category}</span>
-                    <span className="font-medium text-gray-900">{cat.count} tasks</span>
-                  </div>
-                  <div className="h-3 w-full rounded-full bg-gray-200">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
-                      style={{ width: `${cat.percentage}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">{cat.percentage}% of total</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Insights */}
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Insights</h2>
-            <div className="mt-6 space-y-4">
-              {insights.map((insight: any, i: number) => (
-                <div
-                  key={i}
-                  className={`rounded-lg p-4 text-sm ${insight.type === 'positive'
-                    ? 'bg-green-50 text-green-800 border border-green-200'
-                    : insight.type === 'attention'
-                      ? 'bg-yellow-50 text-yellow-800 border border-yellow-200'
-                      : 'bg-blue-50 text-blue-800 border border-blue-200'
-                    }`}
-                >
-                  {insight.text}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* All-Time Stats */}
-        <div className="mt-8 rounded-lg border border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50 p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">All-Time Statistics</h2>
-          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div>
-              <p className="text-sm text-gray-600">Total Tasks</p>
-              <p className="mt-2 text-3xl font-bold text-blue-600">{stats.allTime.tasksCompleted}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Goals Completed</p>
-              <p className="mt-2 text-3xl font-bold text-green-600">{stats.allTime.goalsCompleted}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Best Streak</p>
-              <p className="mt-2 text-3xl font-bold text-orange-600">{stats.allTime.streakBest}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Total Points</p>
-              <p className="mt-2 text-3xl font-bold text-purple-600">{stats.allTime.totalPoints}</p>
-            </div>
-          </div>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }

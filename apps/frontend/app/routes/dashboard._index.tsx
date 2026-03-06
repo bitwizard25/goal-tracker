@@ -245,11 +245,12 @@ function MetricSlider({ title, icon, value, type, gradientClass, colorClass }: a
     setLocalValue(Number(e.target.value));
   };
 
-  const handleRelease = () => {
-    if (localValue === value) return;
+  const handleRelease = (e: React.MouseEvent<HTMLInputElement> | React.TouchEvent<HTMLInputElement>) => {
+    const currentValue = Number((e.target as HTMLInputElement).value);
+    if (currentValue === value) return;
     const formData = new FormData();
     formData.append('_action', 'update_metrics');
-    formData.append(type, localValue.toString());
+    formData.append(type, currentValue.toString());
     fetcher.submit(formData, { method: 'post' });
   };
 
@@ -296,12 +297,13 @@ export default function DashboardPage() {
   const data = useLoaderData<typeof loader>();
   const { user, stats, recentTasks } = data;
 
-  const greeting = () => {
+  const [greeting, setGreeting] = useState('Welcome');
+  useEffect(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+    if (hour < 12) setGreeting('Good morning');
+    else if (hour < 17) setGreeting('Good afternoon');
+    else setGreeting('Good evening');
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50/30">
@@ -311,7 +313,7 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                {greeting()} 👋
+                {greeting} 👋
               </h1>
               <p className="mt-1 text-sm font-medium text-gray-500">{user.email}</p>
             </div>
