@@ -9,7 +9,7 @@ export const meta: MetaFunction = () => [
 export const action: ActionFunction = async ({ request }) => {
   const { requireUserId } = await import('../services/auth.server');
   const { LongTermGoal } = await import('../models/Goals');
-  const { connectDB } = await import('../utils/db.server');
+  const { connectDB } = await import('../lib/db.server');
   const { redirect } = await import('@remix-run/node');
 
   if (request.method !== 'POST') return null;

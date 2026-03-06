@@ -9,7 +9,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
 export const loader: LoaderFunction = async ({ request, params }) => {
   const { requireUserId } = await import('../services/auth.server');
   const { ShortTermGoal } = await import('../models/Goals');
-  const { connectDB } = await import('../utils/db.server');
+  const { connectDB } = await import('../lib/db.server');
 
   await connectDB();
   const userId = await requireUserId(request);
@@ -39,7 +39,7 @@ export const loader: LoaderFunction = async ({ request, params }) => {
 export const action: ActionFunction = async ({ request, params }) => {
   const { requireUserId } = await import('../services/auth.server');
   const { ShortTermGoal } = await import('../models/Goals');
-  const { connectDB } = await import('../utils/db.server');
+  const { connectDB } = await import('../lib/db.server');
 
   await connectDB();
   const userId = await requireUserId(request);
