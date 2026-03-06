@@ -883,7 +883,7 @@ import {
 } from "@remix-run/react";
 
 // app/styles/globals.css
-var globals_default = "/build/_assets/globals-XS5FPEVX.css";
+var globals_default = "/build/_assets/globals-OLIB2X2R.css";
 
 // app/root.tsx
 await init_db_server();
@@ -1147,18 +1147,29 @@ var goals_short_term_new_exports = {};
 __export(goals_short_term_new_exports, {
   action: () => action2,
   default: () => CreateShortTermGoal,
+  loader: () => loader2,
   meta: () => meta3
 });
-import { Form as Form2, useNavigation as useNavigation2 } from "@remix-run/react";
-import { useState as useState2 } from "react";
-import { jsx as jsx4, jsxs as jsxs3 } from "react/jsx-runtime";
+import { Form as Form2, useNavigation as useNavigation2, useLoaderData, useFetcher } from "@remix-run/react";
+import { json } from "@remix-run/node";
+import { useState as useState2, useEffect } from "react";
+import { Fragment, jsx as jsx4, jsxs as jsxs3 } from "react/jsx-runtime";
 var meta3 = () => [
   { title: "Create Short-term Goal - Goal Tracker" }
-], action2 = async ({ request }) => {
-  let { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { ShortTermGoal: ShortTermGoal2 } = await Promise.resolve().then(() => (init_Goals(), Goals_exports)), { redirect: redirect2 } = await import("@remix-run/node");
+], loader2 = async ({ request }) => {
+  let { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { LongTermGoal: LongTermGoal2 } = await Promise.resolve().then(() => (init_Goals(), Goals_exports)), userId = await requireUserId2(request);
+  await connectDB2();
+  let longTermGoals = await LongTermGoal2.find({ user_id: userId, status: "active" }).select("_id title").lean();
+  return json({
+    longTermGoals: longTermGoals.map((g) => ({ id: g._id.toString(), title: g.title }))
+  });
+}, action2 = async ({ request }) => {
+  let { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { ShortTermGoal: ShortTermGoal2 } = await Promise.resolve().then(() => (init_Goals(), Goals_exports)), { redirect: redirect2 } = await import("@remix-run/node");
   if (request.method !== "POST")
     return null;
-  let userId = await requireUserId2(request), formData = await request.formData(), title = formData.get("title"), description = formData.get("description"), start_date = formData.get("start_date"), end_date = formData.get("end_date"), priority = formData.get("priority"), long_term_goal_id = formData.get("long_term_goal_id");
+  let userId = await requireUserId2(request);
+  await connectDB2();
+  let formData = await request.formData(), title = formData.get("title"), description = formData.get("description"), start_date = formData.get("start_date"), end_date = formData.get("end_date"), priority = formData.get("priority"), long_term_goal_id = formData.get("long_term_goal_id");
   if (!title || !description || !start_date || !end_date)
     return { error: "Missing required fields" };
   let milestones = [];
@@ -1174,16 +1185,48 @@ var meta3 = () => [
       start_date: new Date(start_date),
       end_date: new Date(end_date),
       priority: priority || "medium",
-      long_term_goal_id: long_term_goal_id || void 0,
+      long_term_goal_id: long_term_goal_id || null,
       milestones,
-      status: "in_progress"
+      status: "active"
     }).save(), redirect2("/goals");
   } catch (error) {
     return console.error("Create short-term goal error:", error), { error: "An error occurred creating the goal" };
   }
 };
 function CreateShortTermGoal() {
-  let navigation = useNavigation2(), [milestones, setMilestones] = useState2(["", "", ""]), isLoading = navigation.state === "submitting", addMilestone = () => {
+  let { longTermGoals } = useLoaderData(), navigation = useNavigation2(), aiFetcher = useFetcher(), [formData, setFormData] = useState2({
+    title: "",
+    description: "",
+    start_date: "",
+    end_date: "",
+    priority: "medium",
+    long_term_goal_id: ""
+  }), [milestones, setMilestones] = useState2(["", "", ""]), isLoading = navigation.state === "submitting", isAILoading = aiFetcher.state === "submitting";
+  useEffect(() => {
+    if (aiFetcher.data?.success && aiFetcher.data.data) {
+      let aiData = aiFetcher.data.data;
+      setFormData((prev) => ({
+        ...prev,
+        title: aiData.title || prev.title,
+        description: aiData.description || prev.description,
+        start_date: aiData.start_date || prev.start_date,
+        end_date: aiData.end_date || prev.end_date,
+        priority: aiData.priority || prev.priority,
+        long_term_goal_id: aiData.long_term_goal_id || prev.long_term_goal_id
+      })), aiData.milestones && Array.isArray(aiData.milestones) && setMilestones(aiData.milestones.slice(0, 5));
+    } else
+      aiFetcher.data?.error && alert(aiFetcher.data.error);
+  }, [aiFetcher.data]);
+  let handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  }, handleGenerateAI = () => {
+    if (!formData.description || formData.description.length < 5) {
+      alert("Please provide a bit more detail in the Description field for the AI to understand your goal.");
+      return;
+    }
+    let data = new FormData();
+    data.append("description", formData.description), aiFetcher.submit(data, { method: "post", action: "/api/generate-goal" });
+  }, addMilestone = () => {
     milestones.length < 5 && setMilestones([...milestones, ""]);
   }, removeMilestone = (index) => {
     setMilestones(milestones.filter((_, i) => i !== index));
@@ -1196,7 +1239,39 @@ function CreateShortTermGoal() {
       /* @__PURE__ */ jsx4("h1", { className: "text-2xl font-bold text-gray-900", children: "Create Short-term Goal" }),
       /* @__PURE__ */ jsx4("p", { className: "mt-1 text-sm text-gray-600", children: "Break down your long-term vision into actionable milestones" })
     ] }) }),
-    /* @__PURE__ */ jsx4("main", { className: "mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8", children: /* @__PURE__ */ jsxs3(Form2, { method: "post", className: "space-y-8 rounded-lg border border-gray-200 bg-white p-6", children: [
+    /* @__PURE__ */ jsx4("main", { className: "mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8", children: /* @__PURE__ */ jsxs3(Form2, { method: "post", className: "space-y-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm", children: [
+      /* @__PURE__ */ jsxs3("div", { className: "flex flex-col gap-2 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 p-5", children: [
+        /* @__PURE__ */ jsxs3("div", { className: "flex items-center justify-between", children: [
+          /* @__PURE__ */ jsx4("label", { htmlFor: "description", className: "block text-sm font-bold text-blue-900", children: "What are you committing to achieve? *" }),
+          /* @__PURE__ */ jsx4(
+            "button",
+            {
+              type: "button",
+              onClick: handleGenerateAI,
+              disabled: isAILoading,
+              className: "inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0",
+              children: isAILoading ? /* @__PURE__ */ jsx4("span", { className: "animate-pulse", children: "Generating..." }) : /* @__PURE__ */ jsxs3(Fragment, { children: [
+                /* @__PURE__ */ jsx4("span", { children: "\u2728" }),
+                " Autofill with AI"
+              ] })
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsx4(
+          "textarea",
+          {
+            id: "description",
+            name: "description",
+            required: !0,
+            rows: 3,
+            value: formData.description,
+            onChange: handleChange,
+            placeholder: "Type a brief idea here and hit the '\u2728 Autofill with AI' button, or fill out the form manually...",
+            className: "mt-2 block w-full rounded-lg border border-blue-200 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          }
+        ),
+        /* @__PURE__ */ jsx4("p", { className: "text-xs text-blue-600/70 font-medium", children: "The AI will generate an actionable title, estimate dates, map out milestones, and link it to your Long-Term Goals." })
+      ] }),
       /* @__PURE__ */ jsxs3("div", { className: "grid grid-cols-1 gap-6 md:grid-cols-2", children: [
         /* @__PURE__ */ jsxs3("div", { children: [
           /* @__PURE__ */ jsx4("label", { htmlFor: "title", className: "block text-sm font-medium text-gray-700", children: "Goal Title *" }),
@@ -1207,6 +1282,8 @@ function CreateShortTermGoal() {
               id: "title",
               name: "title",
               required: !0,
+              value: formData.title,
+              onChange: handleChange,
               placeholder: "e.g., Complete Spanish Level 1 Course",
               className: "mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             }
@@ -1219,7 +1296,8 @@ function CreateShortTermGoal() {
             {
               id: "priority",
               name: "priority",
-              defaultValue: "medium",
+              value: formData.priority,
+              onChange: handleChange,
               className: "mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500",
               children: [
                 /* @__PURE__ */ jsx4("option", { value: "low", children: "Low" }),
@@ -1229,20 +1307,6 @@ function CreateShortTermGoal() {
             }
           )
         ] })
-      ] }),
-      /* @__PURE__ */ jsxs3("div", { children: [
-        /* @__PURE__ */ jsx4("label", { htmlFor: "description", className: "block text-sm font-medium text-gray-700", children: "Description *" }),
-        /* @__PURE__ */ jsx4(
-          "textarea",
-          {
-            id: "description",
-            name: "description",
-            required: !0,
-            rows: 4,
-            placeholder: "What are you committing to achieve?",
-            className: "mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          }
-        )
       ] }),
       /* @__PURE__ */ jsxs3("div", { className: "grid grid-cols-1 gap-6 md:grid-cols-2", children: [
         /* @__PURE__ */ jsxs3("div", { children: [
@@ -1254,6 +1318,8 @@ function CreateShortTermGoal() {
               id: "start_date",
               name: "start_date",
               required: !0,
+              value: formData.start_date,
+              onChange: handleChange,
               className: "mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             }
           )
@@ -1267,6 +1333,8 @@ function CreateShortTermGoal() {
               id: "end_date",
               name: "end_date",
               required: !0,
+              value: formData.end_date,
+              onChange: handleChange,
               className: "mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             }
           )
@@ -1279,11 +1347,12 @@ function CreateShortTermGoal() {
           {
             id: "long_term_goal_id",
             name: "long_term_goal_id",
+            value: formData.long_term_goal_id,
+            onChange: handleChange,
             className: "mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500",
             children: [
               /* @__PURE__ */ jsx4("option", { value: "", children: "No long-term goal" }),
-              /* @__PURE__ */ jsx4("option", { value: "goal-1", children: "Learn Spanish fluently" }),
-              /* @__PURE__ */ jsx4("option", { value: "goal-2", children: "Build a successful business" })
+              longTermGoals.map((goal) => /* @__PURE__ */ jsx4("option", { value: goal.id, children: goal.title }, goal.id))
             ]
           }
         )
@@ -1297,8 +1366,8 @@ function CreateShortTermGoal() {
               type: "button",
               onClick: addMilestone,
               disabled: milestones.length >= 5,
-              className: "text-sm text-blue-600 hover:text-blue-700 disabled:text-gray-400",
-              children: "Add Milestone"
+              className: "text-sm font-semibold text-blue-600 hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed",
+              children: "+ Add Milestone"
             }
           )
         ] }),
@@ -1319,19 +1388,19 @@ function CreateShortTermGoal() {
             {
               type: "button",
               onClick: () => removeMilestone(index),
-              className: "rounded-md border border-red-300 px-3 py-2 text-red-600 hover:bg-red-50 transition",
+              className: "rounded-md border border-red-200 bg-red-50 text-red-600 px-3 py-2 text-sm font-medium hover:bg-red-100 hover:border-red-300 transition",
               children: "Remove"
             }
           )
         ] }, index)) })
       ] }),
-      /* @__PURE__ */ jsxs3("div", { className: "flex gap-4", children: [
+      /* @__PURE__ */ jsxs3("div", { className: "flex gap-4 pt-4 border-t border-gray-100", children: [
         /* @__PURE__ */ jsx4(
           "button",
           {
             type: "button",
             onClick: () => window.history.back(),
-            className: "flex-1 rounded-md border border-gray-300 px-4 py-2 text-gray-700 font-medium hover:bg-gray-50 transition",
+            className: "flex-1 rounded-full border border-gray-300 px-4 py-2 text-gray-700 font-semibold hover:bg-gray-50 transition",
             children: "Cancel"
           }
         ),
@@ -1339,8 +1408,8 @@ function CreateShortTermGoal() {
           "button",
           {
             type: "submit",
-            disabled: isLoading,
-            className: "flex-1 rounded-md bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700 disabled:opacity-50 transition",
+            disabled: isLoading || isAILoading,
+            className: "flex-1 rounded-full bg-gray-900 px-4 py-2 text-white font-semibold hover:bg-gray-800 hover:shadow-md disabled:opacity-50 transition",
             children: isLoading ? "Creating..." : "Create Goal"
           }
         )
@@ -1353,14 +1422,14 @@ function CreateShortTermGoal() {
 var gamification_index_exports = {};
 __export(gamification_index_exports, {
   default: () => GamificationPage,
-  loader: () => loader2,
+  loader: () => loader3,
   meta: () => meta4
 });
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData as useLoaderData2 } from "@remix-run/react";
 import { jsx as jsx5, jsxs as jsxs4 } from "react/jsx-runtime";
 var meta4 = () => [
   { title: "Gamification - Goal Tracker" }
-], loader2 = async ({ request }) => {
+], loader3 = async ({ request }) => {
   let { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports)), userId = await requireUserId2(request), user = await User2.findById(userId).lean();
   if (!user)
     throw new Error("User not found");
@@ -1437,7 +1506,7 @@ var meta4 = () => [
   };
 };
 function GamificationPage() {
-  let data = useLoaderData(), { user, achievements, leaderboard, recentAchievements } = data, levels = [
+  let data = useLoaderData2(), { user, achievements, leaderboard, recentAchievements } = data, levels = [
     { level: 1, minPoints: 0, name: "Novice", color: "bg-gray-500" },
     { level: 2, minPoints: 100, name: "Beginner", color: "bg-green-500" },
     { level: 3, minPoints: 250, name: "Intermediate", color: "bg-blue-500" },
@@ -1846,18 +1915,62 @@ function CreateLongTermGoal() {
   ] });
 }
 
+// app/routes/api.generate-goal.tsx
+var api_generate_goal_exports = {};
+__export(api_generate_goal_exports, {
+  action: () => action4
+});
+import { json as json2 } from "@remix-run/node";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+var action4 = async ({ request }) => {
+  if (request.method !== "POST")
+    return json2({ error: "Method not allowed" }, { status: 405 });
+  let { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { LongTermGoal: LongTermGoal2 } = await Promise.resolve().then(() => (init_Goals(), Goals_exports)), userId = await requireUserId2(request);
+  await connectDB2();
+  let inputDescription = (await request.formData()).get("description");
+  if (!inputDescription || inputDescription.trim().length < 5)
+    return json2({ error: "Please provide a slightly more detailed description to use AI autocomplete." }, { status: 400 });
+  let apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey)
+    return json2({ error: "GEMINI_API_KEY is not configured on the server." }, { status: 500 });
+  try {
+    let longTermGoals = await LongTermGoal2.find({ user_id: userId, status: "active" }).select("_id title").lean(), model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: "gemini-2.5-flash", generationConfig: { responseMimeType: "application/json" } }), prompt = `
+      You are an expert Productivity Coach. The user wants to create a goal based on this rough thought:
+      "${inputDescription}"
+
+      Your job is to structure this into a formally defined Short-Term Goal.
+      Please return a JSON object with the following schema:
+      {
+        "title": "A concise, actionable, and engaging title for the goal",
+        "description": "An expanded, well-written description of what the user wants to achieve and why it matters.",
+        "start_date": "YYYY-MM-DD format (use today as reference: ${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]})",
+        "end_date": "YYYY-MM-DD format (estimate a reasonable timeframe based on the task, e.g. 1 week to 3 months)",
+        "priority": "low" | "medium" | "high",
+        "long_term_goal_id": "If this task clearly aligns with one of the provided Long-Term Goals, output its ID here. Otherwise, output an empty string.",
+        "milestones": ["Milestone 1", "Milestone 2", "Milestone 3"] (Generate 3 to 5 logical sequential milestones to complete this goal)
+      }
+
+      Available Active Long-Term Goals for linking:
+      ${JSON.stringify(longTermGoals.map((g) => ({ id: g._id.toString(), title: g.title })))}
+    `, responseText = (await model.generateContent(prompt)).response.text(), parsed = JSON.parse(responseText);
+    return json2({ success: !0, data: parsed });
+  } catch (error) {
+    return console.error("AI Goal Generation Error:", error), json2({ error: "Failed to generate goal. Please try again." }, { status: 500 });
+  }
+};
+
 // app/routes/analytics._index.tsx
 var analytics_index_exports = {};
 __export(analytics_index_exports, {
   default: () => AnalyticsPage,
-  loader: () => loader3,
+  loader: () => loader4,
   meta: () => meta6
 });
-import { useLoaderData as useLoaderData2 } from "@remix-run/react";
+import { useLoaderData as useLoaderData3 } from "@remix-run/react";
 import { jsx as jsx7, jsxs as jsxs6 } from "react/jsx-runtime";
 var meta6 = () => [
   { title: "Analytics - Goal Tracker" }
-], loader3 = async ({ request }) => {
+], loader4 = async ({ request }) => {
   let { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { DailyTask: DailyTask2 } = await Promise.resolve().then(() => (init_Tasks(), Tasks_exports)), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports)), userId = await requireUserId2(request), now = /* @__PURE__ */ new Date(), startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay()), startOfWeek.setHours(0, 0, 0, 0);
   let startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1927,7 +2040,7 @@ var meta6 = () => [
   };
 };
 function AnalyticsPage() {
-  let data = useLoaderData2(), { stats, dailyData, categoryBreakdown, insights } = data;
+  let data = useLoaderData3(), { stats, dailyData, categoryBreakdown, insights } = data;
   return /* @__PURE__ */ jsxs6("div", { className: "min-h-screen bg-gray-50", children: [
     /* @__PURE__ */ jsx7("header", { className: "border-b border-gray-200 bg-white", children: /* @__PURE__ */ jsxs6("div", { className: "mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8", children: [
       /* @__PURE__ */ jsx7("h1", { className: "text-2xl font-bold text-gray-900", children: "Analytics" }),
@@ -2067,21 +2180,21 @@ function AnalyticsPage() {
 // app/routes/dashboard._index.tsx
 var dashboard_index_exports = {};
 __export(dashboard_index_exports, {
-  action: () => action4,
+  action: () => action5,
   default: () => DashboardPage,
-  loader: () => loader4,
+  loader: () => loader5,
   meta: () => meta7
 });
-import { useState as useState4, useEffect } from "react";
-import { useLoaderData as useLoaderData3, Link, useFetcher } from "@remix-run/react";
-import { json } from "@remix-run/node";
+import { useState as useState4, useEffect as useEffect2 } from "react";
+import { useLoaderData as useLoaderData4, Link, useFetcher as useFetcher2 } from "@remix-run/react";
+import { json as json3 } from "@remix-run/node";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
 var meta7 = () => [
   { title: "Dashboard - Goal Tracker" }
-], loader4 = async ({ request }) => {
+], loader5 = async ({ request }) => {
   let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports)), { DailyTask: DailyTask2 } = await Promise.resolve().then(() => (init_Tasks(), Tasks_exports)), { UserStats: UserStats2 } = await Promise.resolve().then(() => (init_Analytics(), Analytics_exports));
   await connectDB2();
   let userId = await requireUserId2(request), user = await User2.findById(userId).select("-password_hash").lean();
@@ -2098,7 +2211,7 @@ var meta7 = () => [
     user_id: userId,
     date: { $gte: startOfDay, $lte: endOfDay }
   }).lean();
-  return json({
+  return json3({
     user: {
       email: user.email,
       total_points: user.total_points,
@@ -2118,19 +2231,19 @@ var meta7 = () => [
       difficulty_level: t.difficulty_level
     }))
   });
-}, action4 = async ({ request }) => {
+}, action5 = async ({ request }) => {
   let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { DailyTask: DailyTask2 } = await Promise.resolve().then(() => (init_Tasks(), Tasks_exports)), { UserStats: UserStats2 } = await Promise.resolve().then(() => (init_Analytics(), Analytics_exports));
   await connectDB2();
   let userId = await requireUserId2(request), formData = await request.formData(), actionType = formData.get("_action"), startOfDay = /* @__PURE__ */ new Date();
   if (startOfDay.setHours(0, 0, 0, 0), actionType === "update_metrics") {
     let energy = formData.get("energy"), mood = formData.get("mood"), stats = await UserStats2.findOne({ user_id: userId, date: { $gte: startOfDay } });
-    return stats || (stats = new UserStats2({ user_id: userId, date: /* @__PURE__ */ new Date() })), energy && (stats.energy_average = Number(energy)), mood && (stats.mood_average = Number(mood)), await stats.save(), json({ success: !0 });
+    return stats || (stats = new UserStats2({ user_id: userId, date: /* @__PURE__ */ new Date() })), energy && (stats.energy_average = Number(energy)), mood && (stats.mood_average = Number(mood)), await stats.save(), json3({ success: !0 });
   }
   if (actionType === "update_task_status") {
     let taskId = formData.get("taskId"), status = formData.get("status");
-    return taskId && status && await DailyTask2.findOneAndUpdate({ _id: taskId, user_id: userId }, { status }), json({ success: !0 });
+    return taskId && status && await DailyTask2.findOneAndUpdate({ _id: taskId, user_id: userId }, { status }), json3({ success: !0 });
   }
-  return json({ success: !1 }, { status: 400 });
+  return json3({ success: !1 }, { status: 400 });
 };
 function SortableTaskItem({ task, isDone }) {
   let { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id }), style = {
@@ -2162,8 +2275,8 @@ function SortableTaskItem({ task, isDone }) {
   );
 }
 function TaskBoard({ tasks }) {
-  let fetcher = useFetcher(), [localTasks, setLocalTasks] = useState4(tasks), sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-  useEffect(() => {
+  let fetcher = useFetcher2(), [localTasks, setLocalTasks] = useState4(tasks), sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  useEffect2(() => {
     setLocalTasks(tasks);
   }, [tasks]);
   let pendingTasks = localTasks.filter((t) => t.status !== "completed"), completedTasks = localTasks.filter((t) => t.status === "completed");
@@ -2206,8 +2319,8 @@ function TaskBoard({ tasks }) {
   ] }) });
 }
 function MetricSlider({ title, icon, value, type, gradientClass, colorClass }) {
-  let fetcher = useFetcher(), [localValue, setLocalValue] = useState4(value || 5), isPristine = value === null;
-  useEffect(() => {
+  let fetcher = useFetcher2(), [localValue, setLocalValue] = useState4(value || 5), isPristine = value === null;
+  useEffect2(() => {
     value !== null && setLocalValue(value);
   }, [value]);
   let handleChange = (e) => {
@@ -2252,7 +2365,7 @@ function MetricSlider({ title, icon, value, type, gradientClass, colorClass }) {
   ] });
 }
 function DashboardPage() {
-  let data = useLoaderData3(), { user, stats, recentTasks } = data;
+  let data = useLoaderData4(), { user, stats, recentTasks } = data;
   return /* @__PURE__ */ jsxs7("div", { className: "min-h-screen bg-gray-50/30", children: [
     /* @__PURE__ */ jsx8("div", { className: "border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-10", children: /* @__PURE__ */ jsx8("div", { className: "mx-auto max-w-6xl px-6 py-5", children: /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between", children: [
       /* @__PURE__ */ jsxs7("div", { children: [
@@ -2351,7 +2464,7 @@ function DashboardPage() {
 // app/routes/auth.register.tsx
 var auth_register_exports = {};
 __export(auth_register_exports, {
-  action: () => action5,
+  action: () => action6,
   default: () => RegisterPage,
   meta: () => meta8
 });
@@ -2360,7 +2473,7 @@ import { useState as useState5 } from "react";
 import { jsx as jsx9, jsxs as jsxs8 } from "react/jsx-runtime";
 var meta8 = () => [
   { title: "Register - Goal Tracker" }
-], action5 = async ({ request }) => {
+], action6 = async ({ request }) => {
   let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports)), { UserPsychologyProfile: UserPsychologyProfile2 } = await Promise.resolve().then(() => (init_Analytics(), Analytics_exports)), { hashPassword: hashPassword2, isValidEmail: isValidEmail2, validatePasswordStrength: validatePasswordStrength2 } = await Promise.resolve().then(() => (init_auth(), auth_exports)), { createUserSession: createUserSession2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports));
   if (await connectDB2(), request.method !== "POST")
     return null;
@@ -2547,15 +2660,15 @@ function RegisterPage() {
 var goals_index_exports = {};
 __export(goals_index_exports, {
   default: () => GoalsPage,
-  loader: () => loader5,
+  loader: () => loader6,
   meta: () => meta9
 });
-import { useLoaderData as useLoaderData4, Link as Link3 } from "@remix-run/react";
+import { useLoaderData as useLoaderData5, Link as Link3 } from "@remix-run/react";
 import { useState as useState6 } from "react";
 import { jsx as jsx10, jsxs as jsxs9 } from "react/jsx-runtime";
 var meta9 = () => [
   { title: "Goals - Goal Tracker" }
-], loader5 = async ({ request }) => {
+], loader6 = async ({ request }) => {
   let { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { LongTermGoal: LongTermGoal2, ShortTermGoal: ShortTermGoal2 } = await Promise.resolve().then(() => (init_Goals(), Goals_exports)), userId = await requireUserId2(request), [longTermGoals, shortTermGoals] = await Promise.all([
     LongTermGoal2.find({ user_id: userId }).sort({ created_at: -1 }).lean(),
     ShortTermGoal2.find({ user_id: userId }).sort({ created_at: -1 }).lean()
@@ -2566,7 +2679,7 @@ var meta9 = () => [
   };
 };
 function GoalsPage() {
-  let { longTermGoals, shortTermGoals } = useLoaderData4(), [activeTab, setActiveTab] = useState6("long-term");
+  let { longTermGoals, shortTermGoals } = useLoaderData5(), [activeTab, setActiveTab] = useState6("long-term");
   return /* @__PURE__ */ jsxs9("div", { className: "min-h-screen bg-gray-50", children: [
     /* @__PURE__ */ jsx10("header", { className: "border-b border-gray-200 bg-white", children: /* @__PURE__ */ jsx10("div", { className: "mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8", children: /* @__PURE__ */ jsxs9("div", { className: "flex items-center justify-between", children: [
       /* @__PURE__ */ jsx10("h1", { className: "text-2xl font-bold text-gray-900", children: "Goals" }),
@@ -2727,13 +2840,13 @@ function GoalsPage() {
 // app/routes/auth.logout.tsx
 var auth_logout_exports = {};
 __export(auth_logout_exports, {
-  action: () => action6,
-  loader: () => loader6
+  action: () => action7,
+  loader: () => loader7
 });
-var action6 = async ({ request }) => {
+var action7 = async ({ request }) => {
   let { logout: logout2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports));
   return logout2(request);
-}, loader6 = async () => {
+}, loader7 = async () => {
   let { redirect: redirect2 } = await import("@remix-run/node");
   return redirect2("/");
 };
@@ -2741,7 +2854,7 @@ var action6 = async ({ request }) => {
 // app/routes/auth.login.tsx
 var auth_login_exports = {};
 __export(auth_login_exports, {
-  action: () => action7,
+  action: () => action8,
   default: () => LoginPage,
   meta: () => meta10
 });
@@ -2750,7 +2863,7 @@ import { useState as useState7 } from "react";
 import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
 var meta10 = () => [
   { title: "Login - Goal Tracker" }
-], action7 = async ({ request }) => {
+], action8 = async ({ request }) => {
   let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports)), { verifyPassword: verifyPassword2 } = await Promise.resolve().then(() => (init_auth(), auth_exports)), { createUserSession: createUserSession2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports));
   if (await connectDB2(), request.method !== "POST")
     return null;
@@ -2882,11 +2995,11 @@ function LoginPage() {
 var dashboard_exports = {};
 __export(dashboard_exports, {
   default: () => DashboardLayout,
-  loader: () => loader7
+  loader: () => loader8
 });
 import { Outlet as Outlet2, Link as Link5, useLocation, Form as Form6 } from "@remix-run/react";
 import { jsx as jsx12, jsxs as jsxs11 } from "react/jsx-runtime";
-var loader7 = async ({ request }) => {
+var loader8 = async ({ request }) => {
   let { getUserId: getUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), userId = await getUserId2(request);
   if (!userId) {
     let { redirect: redirect2 } = await import("@remix-run/node");
@@ -3183,7 +3296,7 @@ function AuthLayout() {
 }
 
 // server-assets-manifest:@remix-run/dev/assets-manifest
-var assets_manifest_default = { entry: { module: "/build/entry.client-RJQYT24D.js", imports: ["/build/_shared/chunk-AOAPHHAE.js", "/build/_shared/chunk-2QEWK57A.js"] }, routes: { root: { id: "root", parentId: void 0, path: "", index: void 0, caseSensitive: void 0, module: "/build/root-KHIJF5US.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/_index": { id: "routes/_index", parentId: "root", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/_index-SVOKK25M.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/analytics._index": { id: "routes/analytics._index", parentId: "root", path: "analytics", index: !0, caseSensitive: void 0, module: "/build/routes/analytics._index-QHDXKNZJ.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth": { id: "routes/auth", parentId: "root", path: "auth", index: void 0, caseSensitive: void 0, module: "/build/routes/auth-75I6IVAL.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.login": { id: "routes/auth.login", parentId: "routes/auth", path: "login", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.login-TXYHVVEK.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.logout": { id: "routes/auth.logout", parentId: "routes/auth", path: "logout", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.logout-RT7NNDUM.js", imports: void 0, hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.register": { id: "routes/auth.register", parentId: "routes/auth", path: "register", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.register-OAHWLT7K.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard": { id: "routes/dashboard", parentId: "root", path: "dashboard", index: void 0, caseSensitive: void 0, module: "/build/routes/dashboard-SE67BSPS.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard._index": { id: "routes/dashboard._index", parentId: "routes/dashboard", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/dashboard._index-5DO4772X.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/gamification._index": { id: "routes/gamification._index", parentId: "root", path: "gamification", index: !0, caseSensitive: void 0, module: "/build/routes/gamification._index-2IJLNUE6.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals._index": { id: "routes/goals._index", parentId: "root", path: "goals", index: !0, caseSensitive: void 0, module: "/build/routes/goals._index-IGBAIR34.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.long-term.new": { id: "routes/goals.long-term.new", parentId: "root", path: "goals/long-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.long-term.new-YYD2I3TW.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.short-term.new": { id: "routes/goals.short-term.new", parentId: "root", path: "goals/short-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.short-term.new-UH47DMLE.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/tasks.complete.$taskId": { id: "routes/tasks.complete.$taskId", parentId: "root", path: "tasks/complete/:taskId", index: void 0, caseSensitive: void 0, module: "/build/routes/tasks.complete.$taskId-3IUJE7KO.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 } }, version: "38b8f785", hmr: void 0, url: "/build/manifest-38B8F785.js" };
+var assets_manifest_default = { entry: { module: "/build/entry.client-RJQYT24D.js", imports: ["/build/_shared/chunk-AOAPHHAE.js", "/build/_shared/chunk-2QEWK57A.js"] }, routes: { root: { id: "root", parentId: void 0, path: "", index: void 0, caseSensitive: void 0, module: "/build/root-KCIR3KYQ.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/_index": { id: "routes/_index", parentId: "root", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/_index-SVOKK25M.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/analytics._index": { id: "routes/analytics._index", parentId: "root", path: "analytics", index: !0, caseSensitive: void 0, module: "/build/routes/analytics._index-QHDXKNZJ.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/api.generate-goal": { id: "routes/api.generate-goal", parentId: "root", path: "api/generate-goal", index: void 0, caseSensitive: void 0, module: "/build/routes/api.generate-goal-PMPLF5CY.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth": { id: "routes/auth", parentId: "root", path: "auth", index: void 0, caseSensitive: void 0, module: "/build/routes/auth-75I6IVAL.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.login": { id: "routes/auth.login", parentId: "routes/auth", path: "login", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.login-TXYHVVEK.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.logout": { id: "routes/auth.logout", parentId: "routes/auth", path: "logout", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.logout-RT7NNDUM.js", imports: void 0, hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.register": { id: "routes/auth.register", parentId: "routes/auth", path: "register", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.register-OAHWLT7K.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard": { id: "routes/dashboard", parentId: "root", path: "dashboard", index: void 0, caseSensitive: void 0, module: "/build/routes/dashboard-SE67BSPS.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard._index": { id: "routes/dashboard._index", parentId: "routes/dashboard", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/dashboard._index-5DO4772X.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/gamification._index": { id: "routes/gamification._index", parentId: "root", path: "gamification", index: !0, caseSensitive: void 0, module: "/build/routes/gamification._index-2IJLNUE6.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals._index": { id: "routes/goals._index", parentId: "root", path: "goals", index: !0, caseSensitive: void 0, module: "/build/routes/goals._index-IGBAIR34.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.long-term.new": { id: "routes/goals.long-term.new", parentId: "root", path: "goals/long-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.long-term.new-YYD2I3TW.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.short-term.new": { id: "routes/goals.short-term.new", parentId: "root", path: "goals/short-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.short-term.new-6M4GRSID.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/tasks.complete.$taskId": { id: "routes/tasks.complete.$taskId", parentId: "root", path: "tasks/complete/:taskId", index: void 0, caseSensitive: void 0, module: "/build/routes/tasks.complete.$taskId-3IUJE7KO.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 } }, version: "28155222", hmr: void 0, url: "/build/manifest-28155222.js" };
 
 // server-entry-module:@remix-run/dev/server-build
 var mode = "production", assetsBuildDirectory = "public/build", future = { v3_fetcherPersist: !0, v3_relativeSplatPath: !0, v3_throwAbortReason: !0, v3_routeConfig: !1, v3_singleFetch: !1, v3_lazyRouteDiscovery: !1, unstable_optimizeDeps: !1 }, publicPath = "/build/", entry = { module: entry_server_exports }, routes = {
@@ -3226,6 +3339,14 @@ var mode = "production", assetsBuildDirectory = "public/build", future = { v3_fe
     index: void 0,
     caseSensitive: void 0,
     module: goals_long_term_new_exports
+  },
+  "routes/api.generate-goal": {
+    id: "routes/api.generate-goal",
+    parentId: "root",
+    path: "api/generate-goal",
+    index: void 0,
+    caseSensitive: void 0,
+    module: api_generate_goal_exports
   },
   "routes/analytics._index": {
     id: "routes/analytics._index",
