@@ -1,14 +1,17 @@
 import { useLoaderData, Link } from '@remix-run/react';
 import type { LoaderFunction, MetaFunction } from '@remix-run/node';
+import { useState, useEffect } from 'react';
 
 export const meta: MetaFunction = () => [
   { title: 'Dashboard - Goal Tracker' },
 ];
 
 export const loader: LoaderFunction = async ({ request }) => {
+  const { connectDB } = await import('../lib/db.server');
   const { requireUserId } = await import('../services/auth.server');
   const { User } = await import('../models/User');
 
+  await connectDB();
   const userId = await requireUserId(request);
   const user: any = await User.findById(userId).select('-password_hash').lean();
 
@@ -36,13 +39,14 @@ export const loader: LoaderFunction = async ({ request }) => {
 export default function DashboardPage() {
   const data = useLoaderData<typeof loader>();
   const { user, stats } = data;
+  const [greeting, setGreeting] = useState('Welcome');
 
-  const greeting = () => {
+  useEffect(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+    if (hour < 12) setGreeting('Good morning');
+    else if (hour < 17) setGreeting('Good afternoon');
+    else setGreeting('Good evening');
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -51,7 +55,7 @@ export default function DashboardPage() {
         <div className="mx-auto max-w-6xl px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{greeting()} 👋</h1>
+              <h1 className="text-2xl font-bold text-gray-900">{greeting} 👋</h1>
               <p className="mt-1 text-sm text-gray-500">{user.email}</p>
             </div>
             <div className="flex items-center gap-3">

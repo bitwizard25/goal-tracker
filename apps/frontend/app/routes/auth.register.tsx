@@ -7,10 +7,13 @@ export const meta: MetaFunction = () => [
 ];
 
 export const action: ActionFunction = async ({ request }) => {
+  const { connectDB } = await import('../lib/db.server');
   const { User } = await import('../models/User');
   const { UserPsychologyProfile } = await import('../models/Analytics');
   const { hashPassword, isValidEmail, validatePasswordStrength } = await import('../utils/auth');
   const { createUserSession } = await import('../services/auth.server');
+
+  await connectDB();
 
   if (request.method !== 'POST') {
     return null;
