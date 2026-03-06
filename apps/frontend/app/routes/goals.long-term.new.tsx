@@ -1,5 +1,5 @@
 import { useFetcher, useNavigation, Form } from '@remix-run/react';
-import type { MetaFunction, ActionFunction } from '@remix-run/node';
+import { json, type MetaFunction, type ActionFunction } from '@remix-run/node';
 import { useState, useEffect } from 'react';
 
 export const meta: MetaFunction = () => [
@@ -25,7 +25,7 @@ export const action: ActionFunction = async ({ request }) => {
   const priority = formData.get('priority') as string;
 
   if (!title || !description || !target_date || !category) {
-    return Response.json({ error: 'Missing required fields' }, { status: 400 });
+    return json({ error: 'Missing required fields' }, { status: 400 });
   }
 
   const smart_framework = {
@@ -54,7 +54,7 @@ export const action: ActionFunction = async ({ request }) => {
     return redirect('/goals');
   } catch (error) {
     console.error('Create long-term goal error:', error);
-    return Response.json({ error: 'An error occurred creating the goal' }, { status: 500 });
+    return json({ error: 'An error occurred creating the goal' }, { status: 500 });
   }
 };
 

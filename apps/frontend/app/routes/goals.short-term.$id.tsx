@@ -1,5 +1,5 @@
 import { useLoaderData, Link, useFetcher } from '@remix-run/react';
-import type { MetaFunction, LoaderFunction, ActionFunction } from '@remix-run/node';
+import { json, type MetaFunction, type LoaderFunction, type ActionFunction } from '@remix-run/node';
 import { useEffect, useState } from 'react';
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
@@ -17,7 +17,7 @@ export const loader: LoaderFunction = async ({ request, params }) => {
 
   if (!goal) throw new Response('Not Found', { status: 404 });
 
-  return Response.json({
+  return json({
     goal: {
       _id: goal._id.toString(),
       title: goal.title,
@@ -50,20 +50,20 @@ export const action: ActionFunction = async ({ request, params }) => {
     const milestoneId = formData.get('milestone_id') as string;
     const completed = formData.get('completed') === 'true';
     const goal = await ShortTermGoal.findOne({ _id: params.id, user_id: userId });
-    if (!goal) return Response.json({ error: 'Not found' }, { status: 404 });
+    if (!goal) return json({ error: 'Not found' }, { status: 404 });
     const m = goal.milestones.find((m: any) => m._id.toString() === milestoneId);
     if (m) { m.completed = completed; goal.completed_milestones_count = goal.milestones.filter((x: any) => x.completed).length; }
     await goal.save();
-    return Response.json({ ok: true });
+    return json({ ok: true });
   }
 
   if (_action === 'update_status') {
     const status = formData.get('status') as string;
     await ShortTermGoal.findOneAndUpdate({ _id: params.id, user_id: userId }, { status });
-    return Response.json({ ok: true });
+    return json({ ok: true });
   }
 
-  return Response.json({ error: 'Unknown action' }, { status: 400 });
+  return json({ error: 'Unknown action' }, { status: 400 });
 };
 
 const priorityConfig: Record<string, { dot: string; text: string; label: string; bg: string }> = {

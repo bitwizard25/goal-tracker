@@ -1,9 +1,9 @@
-import type { ActionFunction } from '@remix-run/node';
+import { json, type ActionFunction } from '@remix-run/node';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const action: ActionFunction = async ({ request }) => {
   if (request.method !== 'POST') {
-    return Response.json({ error: 'Method not allowed' }, { status: 405 });
+    return json({ error: 'Method not allowed' }, { status: 405 });
   }
 
   const { requireUserId } = await import('../services/auth.server');
@@ -13,12 +13,12 @@ export const action: ActionFunction = async ({ request }) => {
   const description = formData.get('description') as string;
 
   if (!description || description.trim().length < 5) {
-    return Response.json({ error: 'Please describe your goal in a bit more detail.' }, { status: 400 });
+    return json({ error: 'Please describe your goal in a bit more detail.' }, { status: 400 });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return Response.json({ error: 'AI service is not configured on the server.' }, { status: 500 });
+    return json({ error: 'AI service is not configured on the server.' }, { status: 500 });
   }
 
   try {
@@ -56,9 +56,9 @@ Respond with ONLY the JSON object. No markdown, no explanation.`.trim();
     const responseText = result.response.text();
     const parsed = JSON.parse(responseText);
 
-    return Response.json({ success: true, data: parsed });
+    return json({ success: true, data: parsed });
   } catch (error: any) {
     console.error('AI goal generation error:', error);
-    return Response.json({ error: 'Failed to generate goal. Please try again.' }, { status: 500 });
+    return json({ error: 'Failed to generate goal. Please try again.' }, { status: 500 });
   }
 };

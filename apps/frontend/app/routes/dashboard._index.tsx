@@ -118,6 +118,127 @@ export const action: ActionFunction = async ({ request }) => {
   return json({ success: false }, { status: 400 });
 };
 
+// ─── AI Daily Brief ───────────────────────────────────────────────────────────
+const briefMessages = [
+  'Reading your task list…',
+  'Analysing your streak…',
+  'Detecting your energy pattern…',
+  'Crafting your focus plan…',
+  'Almost ready…',
+];
+
+function AIDailyBrief({ tasks, stats, user }: { tasks: any[]; stats: any; user: any }) {
+  const fetcher = useFetcher<any>();
+  const [phase, setPhase] = useState<'idle' | 'thinking' | 'filled' | 'dismissed'>('idle');
+  const [brief, setBrief] = useState<any>(null);
+  const [msgIdx, setMsgIdx] = useState(0);
+
+  useEffect(() => {
+    if (phase !== 'thinking') return;
+    const id = setInterval(() => setMsgIdx((i) => (i + 1) % briefMessages.length), 1800);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  useEffect(() => {
+    if (fetcher.state !== 'idle' || !fetcher.data) return;
+    if (fetcher.data.error) { setPhase('idle'); return; }
+    setBrief(fetcher.data.data);
+    setPhase('filled');
+  }, [fetcher.state, fetcher.data]);
+
+  const handleGenerate = () => {
+    setPhase('thinking');
+    const fd = new FormData();
+    const pending = tasks.filter((t) => t.status !== 'completed');
+    fd.append('pending',    String(pending.length));
+    fd.append('completed',  String(tasks.filter((t) => t.status === 'completed').length));
+    fd.append('total',      String(tasks.length));
+    fd.append('streak',     String(user.streak_count));
+    if (stats.mood_average)   fd.append('mood',   String(stats.mood_average));
+    if (stats.energy_average) fd.append('energy', String(stats.energy_average));
+    fd.append('userName',   user.email.split('@')[0]);
+    fd.append('taskTitles', pending.map((t: any) => t.title).slice(0, 5).join(', '));
+    fetcher.submit(fd, { method: 'post', action: '/api/daily-brief' });
+  };
+
+  if (phase === 'dismissed') return null;
+
+  return (
+    <div className="mt-6">
+      {phase === 'idle' && (
+        <button
+          onClick={handleGenerate}
+          className="w-full flex items-center justify-center gap-2.5 rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/60 px-6 py-4 text-sm font-semibold text-indigo-600 hover:bg-indigo-100 hover:border-indigo-300 transition-all group"
+        >
+          <span className="text-lg group-hover:scale-110 transition-transform">✨</span>
+          Get your AI morning brief — focus, insight & tip for today
+          <span className="ml-auto text-xs text-indigo-400 font-normal">powered by Gemini</span>
+        </button>
+      )}
+
+      {phase === 'thinking' && (
+        <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-700 p-6 flex items-center gap-5 shadow-lg shadow-indigo-500/20">
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+            <div className="absolute inset-0 rounded-full bg-white/20 animate-ping" />
+            <span className="relative text-2xl animate-pulse">🧠</span>
+          </div>
+          <div>
+            <p className="text-white font-semibold">{briefMessages[msgIdx]}</p>
+            <p className="text-indigo-200 text-xs mt-0.5">Personalising your brief…</p>
+          </div>
+        </div>
+      )}
+
+      {phase === 'filled' && brief && (
+        <div className="rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 p-6 shadow-xl shadow-indigo-500/25 relative overflow-hidden">
+          {/* bg decoration */}
+          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/5 blur-2xl pointer-events-none" />
+          <div className="absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-purple-400/10 blur-2xl pointer-events-none" />
+
+          {/* header */}
+          <div className="flex items-start justify-between relative z-10">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">✨</span>
+              <span className="text-xs font-bold uppercase tracking-widest text-indigo-200">AI Morning Brief</span>
+            </div>
+            <button
+              onClick={() => setPhase('dismissed')}
+              className="text-indigo-300 hover:text-white transition-colors text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* greeting */}
+          <p className="relative z-10 mt-4 text-xl font-bold text-white leading-snug">{brief.greeting}</p>
+
+          {/* cards */}
+          <div className="relative z-10 mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {[
+              { label: '🎯 Focus',   value: brief.focus,   border: 'border-blue-400/40',   bg: 'bg-blue-500/10'   },
+              { label: '💡 Insight', value: brief.insight, border: 'border-purple-400/40', bg: 'bg-purple-500/10' },
+              { label: '⚡ Tip',     value: brief.tip,     border: 'border-indigo-400/40', bg: 'bg-indigo-500/10' },
+            ].map(({ label, value, border, bg }) => (
+              <div key={label} className={`rounded-xl border ${border} ${bg} px-4 py-3 backdrop-blur-sm`}>
+                <p className="text-xs font-bold text-indigo-200 mb-1">{label}</p>
+                <p className="text-sm font-medium text-white leading-snug">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* refresh */}
+          <button
+            onClick={handleGenerate}
+            className="relative z-10 mt-4 text-xs text-indigo-300 hover:text-white transition-colors"
+          >
+            ↻ Refresh brief
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Priority badge ────────────────────────────────────────────────────────────
 const priorityStyles = [
   { bg: 'bg-red-500',    ring: 'ring-red-200',    label: 'P1' },
@@ -517,6 +638,9 @@ export default function DashboardPage() {
             <div className="absolute -left-12 -bottom-12 h-32 w-32 rounded-full bg-purple-400/20 blur-2xl" />
           </div>
         </div>
+
+        {/* AI Daily Brief */}
+        <AIDailyBrief tasks={recentTasks} stats={stats} user={user} />
 
         {/* State Trackers */}
         <div className="mt-10">

@@ -1,6 +1,6 @@
 import { useLoaderData, Link, useFetcher } from '@remix-run/react';
-import type { MetaFunction, LoaderFunction, ActionFunction } from '@remix-run/node';
-import { useState } from 'react';
+import { json, type MetaFunction, type LoaderFunction, type ActionFunction } from '@remix-run/node';
+import { useState, useEffect } from 'react';
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
   { title: `${(data as any)?.goal?.title ?? 'Goal'} - Goal Tracker` },
@@ -17,7 +17,7 @@ export const loader: LoaderFunction = async ({ request, params }) => {
 
   if (!goal) throw new Response('Not Found', { status: 404 });
 
-  return Response.json({
+  return json({
     goal: {
       _id: goal._id.toString(),
       title: goal.title,
@@ -46,7 +46,7 @@ export const action: ActionFunction = async ({ request, params }) => {
   if (_action === 'update_status') {
     const status = formData.get('status') as string;
     await LongTermGoal.findOneAndUpdate({ _id: params.id, user_id: userId }, { status });
-    return Response.json({ ok: true });
+    return json({ ok: true });
   }
 
   if (_action === 'update_progress') {
@@ -55,10 +55,34 @@ export const action: ActionFunction = async ({ request, params }) => {
       { _id: params.id, user_id: userId },
       { current_progress_percentage: Math.max(0, Math.min(100, progress)) },
     );
-    return Response.json({ ok: true });
+    return json({ ok: true });
   }
 
-  return Response.json({ error: 'Unknown action' }, { status: 400 });
+  if (_action === 'add_tasks') {
+    const { DailyTask } = await import('../models/Tasks');
+    const raw = formData.get('tasks') as string;
+    try {
+      const tasks = JSON.parse(raw);
+      const count = await DailyTask.countDocuments({ user_id: userId });
+      await DailyTask.insertMany(
+        tasks.map((t: any, i: number) => ({
+          user_id: userId,
+          title: t.title,
+          description: t.description ?? '',
+          difficulty_level: Math.min(5, Math.max(1, Number(t.difficulty_level) || 3)),
+          due_date: t.due_date ? new Date(t.due_date) : new Date(),
+          tags: t.tags ?? [],
+          status: 'pending',
+          sort_order: count + i,
+        })),
+      );
+      return json({ ok: true, added: tasks.length });
+    } catch (e) {
+      return json({ error: 'Failed to add tasks.' }, { status: 500 });
+    }
+  }
+
+  return json({ error: 'Unknown action' }, { status: 400 });
 };
 
 const categoryConfig: Record<string, { color: string; bg: string; icon: string }> = {
@@ -96,16 +120,87 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+const taskGenMessages = [
+  'Reading your goal…',
+  'Planning this week's actions…',
+  'Sizing each task to one day…',
+  'Ordering by importance…',
+  'Almost done…',
+];
+
+const difficultyEmoji = ['', '😌', '🙂', '🤔', '💪', '🔥'];
+
 export default function LongTermGoalDetail() {
   const { goal } = useLoaderData<typeof loader>() as any;
-  const fetcher = useFetcher();
+  const fetcher    = useFetcher();
+  const taskFetcher = useFetcher<any>();
+  const createFetcher = useFetcher<any>();
+
   const [progress, setProgress] = useState(goal.current_progress_percentage);
+  const [taskGenPhase, setTaskGenPhase] = useState<'idle' | 'thinking' | 'review'>('idle');
+  const [generatedTasks, setGeneratedTasks] = useState<any[]>([]);
+  const [selectedTasks, setSelectedTasks] = useState<Set<number>>(new Set());
+  const [taskMsgIdx, setTaskMsgIdx] = useState(0);
+  const [addedCount, setAddedCount] = useState(0);
 
   const cat = categoryConfig[goal.category] ?? { color: 'text-gray-700', bg: 'bg-gray-100', icon: '📌' };
   const pri = priorityConfig[goal.priority] ?? priorityConfig.medium;
   const stat = statusConfig[goal.status] ?? statusConfig.active;
   const smart = goal.smart_framework ?? {};
   const hasSmart = Object.values(smart).some(Boolean);
+
+  // Cycle thinking messages during task generation
+  useEffect(() => {
+    if (taskGenPhase !== 'thinking') return;
+    const id = setInterval(() => setTaskMsgIdx((i) => (i + 1) % taskGenMessages.length), 1800);
+    return () => clearInterval(id);
+  }, [taskGenPhase]);
+
+  // Handle task generation response
+  useEffect(() => {
+    if (taskFetcher.state !== 'idle' || !taskFetcher.data) return;
+    if (taskFetcher.data.error) { setTaskGenPhase('idle'); return; }
+    const tasks = taskFetcher.data.tasks ?? [];
+    setGeneratedTasks(tasks);
+    setSelectedTasks(new Set(tasks.map((_: any, i: number) => i)));
+    setTaskGenPhase('review');
+  }, [taskFetcher.state, taskFetcher.data]);
+
+  // Handle task creation response
+  useEffect(() => {
+    if (createFetcher.state !== 'idle' || !createFetcher.data) return;
+    if (createFetcher.data.ok) {
+      setAddedCount(selectedTasks.size);
+      setTaskGenPhase('idle');
+      setGeneratedTasks([]);
+    }
+  }, [createFetcher.state, createFetcher.data]);
+
+  const handleGenerateTasks = () => {
+    setTaskGenPhase('thinking');
+    const fd = new FormData();
+    fd.append('goalTitle',       goal.title);
+    fd.append('goalDescription', goal.description ?? '');
+    fd.append('targetDate',      goal.target_date ?? '');
+    fd.append('category',        goal.category ?? '');
+    taskFetcher.submit(fd, { method: 'post', action: '/api/generate-goal-tasks' });
+  };
+
+  const handleAddSelected = () => {
+    const selected = generatedTasks.filter((_, i) => selectedTasks.has(i));
+    const fd = new FormData();
+    fd.append('_action', 'add_tasks');
+    fd.append('tasks', JSON.stringify(selected));
+    createFetcher.submit(fd, { method: 'post', action: '/dashboard' });
+  };
+
+  const toggleTask = (i: number) => {
+    setSelectedTasks((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
 
   const handleProgressRelease = (e: React.MouseEvent<HTMLInputElement> | React.TouchEvent<HTMLInputElement>) => {
     const val = Number((e.target as HTMLInputElement).value);
@@ -212,6 +307,109 @@ export default function LongTermGoalDetail() {
             className="w-full accent-indigo-500"
           />
           <p className="text-xs text-gray-400 text-center">Drag to update your progress</p>
+        </div>
+
+        {/* ── AI Goal → Tasks Generator ─────────────────────────────── */}
+        <div className="rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+          {/* Header strip */}
+          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between">
+            <div>
+              <p className="text-white font-bold text-sm tracking-wide">✨ AI Task Cascade</p>
+              <p className="text-indigo-100 text-xs mt-0.5">Generate this week's daily tasks from your goal</p>
+            </div>
+            {addedCount > 0 && (
+              <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold text-white">
+                ✓ {addedCount} added to board
+              </span>
+            )}
+          </div>
+
+          <div className="bg-white p-6">
+            {taskGenPhase === 'idle' && (
+              <button
+                onClick={handleGenerateTasks}
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-indigo-200 bg-indigo-50 py-4 text-sm font-semibold text-indigo-600 hover:bg-indigo-100 hover:border-indigo-300 transition-all"
+              >
+                <span className="text-lg">🚀</span>
+                Generate 5 daily tasks for this week
+              </button>
+            )}
+
+            {taskGenPhase === 'thinking' && (
+              <div className="flex items-center gap-4 py-4">
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-indigo-100 animate-ping opacity-60" />
+                  <span className="relative text-xl animate-pulse">🧠</span>
+                </div>
+                <div>
+                  <p className="font-semibold text-indigo-700 text-sm">{taskGenMessages[taskMsgIdx]}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Creating focused daily tasks…</p>
+                </div>
+              </div>
+            )}
+
+            {taskGenPhase === 'review' && generatedTasks.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">
+                  Select tasks to add to your board:
+                </p>
+                {generatedTasks.map((task, i) => (
+                  <button
+                    key={i}
+                    onClick={() => toggleTask(i)}
+                    className={`w-full flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
+                      selectedTasks.has(i)
+                        ? 'border-indigo-200 bg-indigo-50'
+                        : 'border-gray-100 bg-gray-50 opacity-60'
+                    }`}
+                  >
+                    <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 text-xs font-bold transition-all ${
+                      selectedTasks.has(i)
+                        ? 'border-indigo-500 bg-indigo-500 text-white'
+                        : 'border-gray-300 text-transparent'
+                    }`}>✓</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900">{task.title}</span>
+                        <span className="text-xs text-gray-400">{difficultyEmoji[task.difficulty_level] ?? ''}</span>
+                        <span className="text-xs text-gray-400">· {task.due_date}</span>
+                      </div>
+                      {task.description && (
+                        <p className="mt-0.5 text-xs text-gray-500 leading-snug">{task.description}</p>
+                      )}
+                      {task.tags?.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {task.tags.map((tag: string) => (
+                            <span key={tag} className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => setTaskGenPhase('idle')}
+                    className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddSelected}
+                    disabled={selectedTasks.size === 0 || createFetcher.state !== 'idle'}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-2.5 text-sm font-bold text-white shadow hover:opacity-90 disabled:opacity-50 transition"
+                  >
+                    {createFetcher.state !== 'idle'
+                      ? 'Adding…'
+                      : `Add ${selectedTasks.size} task${selectedTasks.size !== 1 ? 's' : ''} to board`}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* SMART Framework */}

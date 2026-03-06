@@ -34,11 +34,13 @@ export const loader: LoaderFunction = async ({ request }) => {
       _id: g._id.toString(),
       title: g.title,
       status: g.status,
+      priority: g.priority ?? 'medium',
       milestones: (g.milestones ?? []).map((m: any) => ({
         id: m.id ?? m._id?.toString() ?? String(Math.random()),
         title: m.title,
         completed: !!m.completed,
       })),
+      start_date: g.start_date ? new Date(g.start_date).toISOString() : null,
       end_date: g.end_date ? new Date(g.end_date).toISOString() : null,
     })),
   });
@@ -175,66 +177,105 @@ export default function GoalsPage() {
               />
             ) : (
               longTermGoals.map((goal: any) => {
-                const cat = categoryConfig[goal.category] ?? { color: 'text-gray-700', bg: 'bg-gray-100', icon: '📌' };
-                const pri = priorityConfig[goal.priority] ?? priorityConfig.low;
-                const due = getDaysUntil(goal.target_date, now);
+                const cat  = categoryConfig[goal.category] ?? { color: 'text-gray-700', bg: 'bg-gray-100', icon: '📌' };
+                const pri  = priorityConfig[goal.priority] ?? priorityConfig.low;
+                const due  = getDaysUntil(goal.target_date, now);
                 const prog = Math.min(100, goal.current_progress_percentage ?? 0);
+
+                // SVG ring
+                const R = 26; const circ = 2 * Math.PI * R;
+                const dash = (prog / 100) * circ;
+
+                const isCompleted = goal.status === 'completed';
+                const isUrgent    = due?.urgent && !isCompleted;
 
                 return (
                   <div
                     key={goal._id}
-                    className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md hover:border-blue-100 transition-all duration-300"
+                    className={`rounded-2xl bg-white border shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden ${
+                      isUrgent ? 'border-red-200' : 'border-gray-100 hover:border-blue-100'
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        {/* Badges */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${cat.bg} ${cat.color}`}>
-                            {cat.icon} {goal.category ?? 'general'}
-                          </span>
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 ${pri.text}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${pri.dot}`} />
-                            {pri.label} priority
-                          </span>
-                          {goal.status === 'completed' && (
-                            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">✓ Completed</span>
-                          )}
+                    {isCompleted && <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-teal-500" />}
+                    {isUrgent    && <div className="h-1 w-full bg-gradient-to-r from-red-400 to-rose-500" />}
+
+                    <div className="p-6">
+                      <div className="flex items-start gap-5">
+                        {/* Progress ring */}
+                        <div className="relative shrink-0 flex flex-col items-center gap-1">
+                          <svg width="68" height="68" viewBox="0 0 68 68">
+                            <circle cx="34" cy="34" r={R} fill="none" stroke="#f3f4f6" strokeWidth="6" />
+                            <circle
+                              cx="34" cy="34" r={R} fill="none"
+                              stroke={isCompleted ? '#10b981' : prog >= 60 ? '#6366f1' : '#3b82f6'}
+                              strokeWidth="6"
+                              strokeLinecap="round"
+                              strokeDasharray={`${dash} ${circ}`}
+                              style={{ transform: 'rotate(-90deg)', transformOrigin: '34px 34px', transition: 'stroke-dasharray 0.7s ease' }}
+                            />
+                            <text x="34" y="37" textAnchor="middle" fontSize="13" fontWeight="700"
+                              fill={isCompleted ? '#059669' : '#374151'}>
+                              {prog}%
+                            </text>
+                          </svg>
+                          <span className="text-xs font-semibold text-gray-400">done</span>
                         </div>
 
-                        <h3 className="mt-3 text-lg font-bold text-gray-900 leading-snug">{goal.title}</h3>
-
-                        {/* Progress */}
-                        <div className="mt-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Progress</span>
-                            <span className="text-sm font-bold text-gray-800">{prog}%</span>
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${cat.bg} ${cat.color}`}>
+                              {cat.icon} {goal.category ?? 'general'}
+                            </span>
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 ${pri.text}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${pri.dot}`} />
+                              {pri.label}
+                            </span>
+                            {isCompleted && (
+                              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">✓ Completed</span>
+                            )}
+                            {due && !isCompleted && (
+                              <span className={`text-xs font-bold rounded-full px-2.5 py-1 ${
+                                due.urgent ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {due.urgent ? '⚠️' : '🗓'} {due.label}
+                              </span>
+                            )}
                           </div>
-                          <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-700 ${
-                                prog >= 100 ? 'bg-gradient-to-r from-emerald-400 to-teal-500'
-                                : prog >= 60  ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
-                                : 'bg-gradient-to-r from-blue-400 to-indigo-400'
-                              }`}
-                              style={{ width: `${prog}%` }}
-                            />
+
+                          <h3 className="mt-2 text-base font-bold text-gray-900 leading-snug">{goal.title}</h3>
+
+                          {/* Progress bar */}
+                          <div className="mt-4">
+                            <div className="h-2.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-700 ${
+                                  isCompleted ? 'bg-gradient-to-r from-emerald-400 to-teal-500'
+                                  : prog >= 60 ? 'bg-gradient-to-r from-indigo-500 to-blue-500'
+                                  : 'bg-gradient-to-r from-blue-400 to-indigo-400'
+                                }`}
+                                style={{ width: `${prog}%` }}
+                              />
+                            </div>
+                            {prog === 0 && (
+                              <p className="mt-1.5 text-xs text-gray-400">No progress yet — open goal to update</p>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-end gap-3 shrink-0">
-                        {due && (
-                          <span className={`text-xs font-bold rounded-full px-3 py-1 ${
-                            due.urgent ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {due.urgent ? '⚠️' : '🗓'} {due.label}
-                          </span>
-                        )}
+                      {/* CTA */}
+                      <div className="mt-5">
                         <Link
                           to={`/goals/long-term/${goal._id}`}
-                          className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-all"
+                          className={`flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold transition-all ${
+                            isCompleted
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                              : 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/25 hover:opacity-90'
+                          }`}
                         >
-                          View →
+                          {isCompleted ? '🏆 View Achievement' : prog === 0 ? '🚀 Start Goal' : '📈 Update Progress'}
+                          <span>→</span>
                         </Link>
                       </div>
                     </div>
@@ -263,76 +304,194 @@ export default function GoalsPage() {
                 const milestones = goal.milestones ?? [];
                 const done = milestones.filter((m: any) => m.completed).length;
                 const total = milestones.length;
-                const progress = total > 0 ? Math.round((done / total) * 100) : 0;
-                const due = getDaysUntil(goal.end_date, now);
+                const milestonePct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+                // Time elapsed fraction (client-side only via `now`)
+                const startMs = goal.start_date ? new Date(goal.start_date).getTime() : 0;
+                const endMs   = goal.end_date   ? new Date(goal.end_date).getTime()   : 0;
+                const spanMs  = endMs - startMs;
+                const timePct = now && spanMs > 0
+                  ? Math.min(100, Math.max(0, Math.round(((now - startMs) / spanMs) * 100)))
+                  : 0;
+                const daysTotal   = spanMs > 0 ? Math.ceil(spanMs / 86400000) : 0;
+                const daysElapsed = now && startMs ? Math.max(0, Math.ceil((now - startMs) / 86400000)) : 0;
+                const daysLeft    = now && endMs   ? Math.max(0, Math.ceil((endMs - now) / 86400000))   : daysTotal;
+
+                // Behind: milestone progress lags time by >15%
+                const isBehind  = timePct > 0 && milestonePct < timePct - 15;
+                const isOnTrack = milestonePct >= timePct - 15;
+                const isDone    = goal.status === 'completed';
+
+                const accentColor = isDone   ? 'emerald'
+                                  : isBehind ? 'amber'
+                                  : 'emerald';
+
+                // SVG ring
+                const R = 26; const circ = 2 * Math.PI * R;
+                const dash = (milestonePct / 100) * circ;
+
+                // Next incomplete milestone
+                const nextMilestone = milestones.find((m: any) => !m.completed);
 
                 return (
                   <div
                     key={goal._id}
-                    className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md hover:border-emerald-100 transition-all duration-300"
+                    className={`rounded-2xl bg-white border shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden ${
+                      isBehind ? 'border-amber-200' : 'border-gray-100 hover:border-emerald-100'
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            goal.status === 'completed'  ? 'bg-emerald-100 text-emerald-700'
-                            : goal.status === 'in_progress' ? 'bg-amber-100 text-amber-700'
-                            : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {goal.status === 'completed' ? '✓ Done'
-                            : goal.status === 'in_progress' ? '⚡ In Progress'
-                            : '○ Pending'}
-                          </span>
-                          {due && (
-                            <span className={`text-xs font-bold rounded-full px-2.5 py-1 ${
-                              due.urgent ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {due.urgent ? '⚠️' : '🗓'} {due.label}
-                            </span>
-                          )}
+                    {/* Urgency top stripe */}
+                    {isBehind && (
+                      <div className="h-1 w-full bg-gradient-to-r from-amber-400 to-orange-400" />
+                    )}
+                    {isDone && (
+                      <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-teal-500" />
+                    )}
+
+                    <div className="p-6">
+                      {/* Header row */}
+                      <div className="flex items-start gap-5">
+                        {/* Progress ring */}
+                        <div className="relative shrink-0 flex flex-col items-center gap-1">
+                          <svg width="68" height="68" viewBox="0 0 68 68">
+                            {/* track */}
+                            <circle cx="34" cy="34" r={R} fill="none" stroke="#f3f4f6" strokeWidth="6" />
+                            {/* progress */}
+                            <circle
+                              cx="34" cy="34" r={R} fill="none"
+                              stroke={isDone ? '#10b981' : isBehind ? '#f59e0b' : '#10b981'}
+                              strokeWidth="6"
+                              strokeLinecap="round"
+                              strokeDasharray={`${dash} ${circ}`}
+                              strokeDashoffset={circ / 4}  /* start at top */
+                              style={{ transform: 'rotate(-90deg)', transformOrigin: '34px 34px', transition: 'stroke-dasharray 0.7s ease' }}
+                            />
+                            <text x="34" y="37" textAnchor="middle" fontSize="13" fontWeight="700"
+                              fill={isDone ? '#059669' : isBehind ? '#d97706' : '#374151'}>
+                              {milestonePct}%
+                            </text>
+                          </svg>
+                          <span className="text-xs font-semibold text-gray-400">{done}/{total}</span>
                         </div>
 
-                        <h3 className="mt-3 text-lg font-bold text-gray-900">{goal.title}</h3>
-
-                        {total > 0 && (
-                          <div className="mt-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Milestones</span>
-                              <span className="text-sm font-bold text-gray-800">{done}/{total}</span>
-                            </div>
-                            <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500 transition-all duration-700"
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
-                            <div className="mt-3 space-y-1.5">
-                              {milestones.slice(0, 3).map((m: any) => (
-                                <div key={m.id} className="flex items-center gap-2.5">
-                                  <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                                    m.completed ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'
-                                  }`}>
-                                    {m.completed ? '✓' : '·'}
-                                  </div>
-                                  <span className={`text-sm ${m.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                                    {m.title}
-                                  </span>
-                                </div>
-                              ))}
-                              {milestones.length > 3 && (
-                                <p className="text-xs text-gray-400 pl-7">+{milestones.length - 3} more</p>
-                              )}
-                            </div>
+                        {/* Title + badges */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              isDone ? 'bg-emerald-100 text-emerald-700'
+                              : isBehind ? 'bg-amber-100 text-amber-700'
+                              : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {isDone ? '✓ Completed' : isBehind ? '⚠️ Behind' : '⚡ Active'}
+                            </span>
+                            {daysLeft > 0 && !isDone && (
+                              <span className={`text-xs font-bold rounded-full px-2.5 py-1 ${
+                                daysLeft <= 3  ? 'bg-red-100 text-red-700'
+                                : daysLeft <= 7 ? 'bg-amber-100 text-amber-700'
+                                : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                🗓 {daysLeft}d left
+                              </span>
+                            )}
                           </div>
-                        )}
+                          <h3 className="mt-2 text-base font-bold text-gray-900 leading-snug">{goal.title}</h3>
+                        </div>
                       </div>
 
-                      <div className="shrink-0">
+                      {/* Dual progress bars */}
+                      {daysTotal > 0 && (
+                        <div className="mt-5 space-y-2.5">
+                          <div className="flex items-center gap-3">
+                            <span className="w-20 text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Time</span>
+                            <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-blue-400 to-indigo-400 transition-all duration-700"
+                                style={{ width: `${timePct}%` }}
+                              />
+                            </div>
+                            <span className="w-16 text-right text-xs font-semibold text-gray-500">{daysElapsed}/{daysTotal}d</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="w-20 text-xs font-semibold text-gray-400 uppercase tracking-wide shrink-0">Progress</span>
+                            <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-700 ${
+                                  isDone ? 'bg-gradient-to-r from-emerald-400 to-teal-500'
+                                  : isBehind ? 'bg-gradient-to-r from-amber-400 to-orange-400'
+                                  : 'bg-gradient-to-r from-emerald-400 to-teal-500'
+                                }`}
+                                style={{ width: `${milestonePct}%` }}
+                              />
+                            </div>
+                            <span className="w-16 text-right text-xs font-semibold text-gray-500">{done}/{total}</span>
+                          </div>
+                          {isBehind && (
+                            <p className="text-xs text-amber-600 font-medium pl-[92px]">
+                              You're {timePct - milestonePct}% behind schedule — start now to catch up!
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Next Up — implementation intention focal point */}
+                      {nextMilestone && !isDone && (
+                        <div className="mt-5">
+                          <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">▶ Next Up</p>
+                          <Link
+                            to={`/goals/short-term/${goal._id}`}
+                            className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition-all group/next ${
+                              isBehind
+                                ? 'border-amber-200 bg-amber-50 hover:bg-amber-100'
+                                : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'
+                            }`}
+                          >
+                            <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                              isBehind ? 'border-amber-400' : 'border-emerald-400'
+                            }`} />
+                            <span className="flex-1 text-sm font-semibold text-gray-800 leading-snug">{nextMilestone.title}</span>
+                            <span className={`shrink-0 text-xs font-bold transition-transform group-hover/next:translate-x-0.5 ${
+                              isBehind ? 'text-amber-600' : 'text-emerald-600'
+                            }`}>→</span>
+                          </Link>
+                        </div>
+                      )}
+
+                      {/* All milestones compact list */}
+                      {total > 0 && (
+                        <div className="mt-4 space-y-1.5">
+                          {milestones.map((m: any, idx: number) => (
+                            m.id === nextMilestone?.id ? null : (
+                              <div key={m.id} className="flex items-center gap-2.5">
+                                <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                                  m.completed ? 'bg-emerald-500 text-white' : 'border border-gray-300 text-gray-300'
+                                }`}>
+                                  {m.completed ? '✓' : ''}
+                                </div>
+                                <span className={`text-sm leading-snug ${
+                                  m.completed ? 'line-through text-gray-400' : 'text-gray-500'
+                                }`}>
+                                  {m.title}
+                                </span>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      )}
+
+                      {/* CTA */}
+                      <div className="mt-5">
                         <Link
                           to={`/goals/short-term/${goal._id}`}
-                          className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-all"
+                          className={`flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold transition-all ${
+                            isDone
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                              : isBehind
+                              ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/25 hover:opacity-90'
+                              : 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/25 hover:opacity-90'
+                          }`}
                         >
-                          View →
+                          {isDone ? '🏆 View Achievement' : isBehind ? '🔥 Catch Up Now' : '⚡ Continue Sprint'}
+                          <span>→</span>
                         </Link>
                       </div>
                     </div>
