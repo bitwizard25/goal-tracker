@@ -86,33 +86,33 @@ export const action: ActionFunction = async ({ request, params }) => {
 };
 
 const categoryConfig: Record<string, { color: string; bg: string; icon: string }> = {
-  health:        { color: 'text-emerald-700', bg: 'bg-emerald-100', icon: '💪' },
-  career:        { color: 'text-blue-700',    bg: 'bg-blue-100',    icon: '💼' },
-  personal:      { color: 'text-purple-700',  bg: 'bg-purple-100',  icon: '🌱' },
-  education:     { color: 'text-amber-700',   bg: 'bg-amber-100',   icon: '📚' },
-  finance:       { color: 'text-green-700',   bg: 'bg-green-100',   icon: '💰' },
-  relationships: { color: 'text-rose-700',    bg: 'bg-rose-100',    icon: '❤️' },
+  health: { color: 'text-emerald-700', bg: 'bg-emerald-100', icon: '💪' },
+  career: { color: 'text-blue-700', bg: 'bg-blue-100', icon: '💼' },
+  personal: { color: 'text-purple-700', bg: 'bg-purple-100', icon: '🌱' },
+  education: { color: 'text-amber-700', bg: 'bg-amber-100', icon: '📚' },
+  finance: { color: 'text-green-700', bg: 'bg-green-100', icon: '💰' },
+  relationships: { color: 'text-rose-700', bg: 'bg-rose-100', icon: '❤️' },
 };
 
 const priorityConfig: Record<string, { dot: string; text: string; label: string; bg: string }> = {
-  high:   { dot: 'bg-red-500',   text: 'text-red-700',   label: 'High',   bg: 'bg-red-50'   },
+  high: { dot: 'bg-red-500', text: 'text-red-700', label: 'High', bg: 'bg-red-50' },
   medium: { dot: 'bg-amber-400', text: 'text-amber-700', label: 'Medium', bg: 'bg-amber-50' },
-  low:    { dot: 'bg-gray-400',  text: 'text-gray-600',  label: 'Low',    bg: 'bg-gray-50'  },
+  low: { dot: 'bg-gray-400', text: 'text-gray-600', label: 'Low', bg: 'bg-gray-50' },
 };
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  active:    { label: '⚡ Active',     color: 'text-blue-700',    bg: 'bg-blue-100'    },
-  completed: { label: '✓ Completed',   color: 'text-emerald-700', bg: 'bg-emerald-100' },
-  paused:    { label: '⏸ Paused',     color: 'text-amber-700',   bg: 'bg-amber-100'   },
-  abandoned: { label: '✗ Abandoned',   color: 'text-red-700',     bg: 'bg-red-100'     },
+  active: { label: '⚡ Active', color: 'text-blue-700', bg: 'bg-blue-100' },
+  completed: { label: '✓ Completed', color: 'text-emerald-700', bg: 'bg-emerald-100' },
+  paused: { label: '⏸ Paused', color: 'text-amber-700', bg: 'bg-amber-100' },
+  abandoned: { label: '✗ Abandoned', color: 'text-red-700', bg: 'bg-red-100' },
 };
 
 const smartLabels: Record<string, { emoji: string; label: string; desc: string }> = {
-  specific:   { emoji: '🎯', label: 'Specific',   desc: 'What exactly will you achieve?' },
-  measurable: { emoji: '📏', label: 'Measurable', desc: 'How will you track progress?'   },
-  achievable: { emoji: '💪', label: 'Achievable', desc: 'Why is this realistic?'          },
-  relevant:   { emoji: '❤️', label: 'Relevant',   desc: 'Why does this matter to you?'   },
-  time_bound: { emoji: '⏰', label: 'Time-bound', desc: 'What is your timeline?'          },
+  specific: { emoji: '🎯', label: 'Specific', desc: 'What exactly will you achieve?' },
+  measurable: { emoji: '📏', label: 'Measurable', desc: 'How will you track progress?' },
+  achievable: { emoji: '💪', label: 'Achievable', desc: 'Why is this realistic?' },
+  relevant: { emoji: '❤️', label: 'Relevant', desc: 'Why does this matter to you?' },
+  time_bound: { emoji: '⏰', label: 'Time-bound', desc: 'What is your timeline?' },
 };
 
 function fmtDate(iso: string | null) {
@@ -122,7 +122,7 @@ function fmtDate(iso: string | null) {
 
 const taskGenMessages = [
   'Reading your goal…',
-  'Planning this week's actions…',
+  'Planning actions for the week…',
   'Sizing each task to one day…',
   'Ordering by importance…',
   'Almost done…',
@@ -132,7 +132,7 @@ const difficultyEmoji = ['', '😌', '🙂', '🤔', '💪', '🔥'];
 
 export default function LongTermGoalDetail() {
   const { goal } = useLoaderData<typeof loader>() as any;
-  const fetcher    = useFetcher();
+  const fetcher = useFetcher();
   const taskFetcher = useFetcher<any>();
   const createFetcher = useFetcher<any>();
 
@@ -179,10 +179,10 @@ export default function LongTermGoalDetail() {
   const handleGenerateTasks = () => {
     setTaskGenPhase('thinking');
     const fd = new FormData();
-    fd.append('goalTitle',       goal.title);
+    fd.append('goalTitle', goal.title);
     fd.append('goalDescription', goal.description ?? '');
-    fd.append('targetDate',      goal.target_date ?? '');
-    fd.append('category',        goal.category ?? '');
+    fd.append('targetDate', goal.target_date ?? '');
+    fd.append('category', goal.category ?? '');
     taskFetcher.submit(fd, { method: 'post', action: '/api/generate-goal-tasks' });
   };
 
@@ -263,11 +263,10 @@ export default function LongTermGoalDetail() {
                 name="status"
                 value={s}
                 disabled={goal.status === s}
-                className={`rounded-xl py-2 text-xs font-semibold transition ${
-                  goal.status === s
-                    ? `${statusConfig[s].bg} ${statusConfig[s].color}`
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
+                className={`rounded-xl py-2 text-xs font-semibold transition ${goal.status === s
+                  ? `${statusConfig[s].bg} ${statusConfig[s].color}`
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
               >
                 {statusConfig[s].label}
               </button>
@@ -286,11 +285,10 @@ export default function LongTermGoalDetail() {
 
           <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${
-                progress >= 100 ? 'bg-gradient-to-r from-emerald-400 to-teal-500'
-                : progress >= 60  ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
-                : 'bg-gradient-to-r from-blue-400 to-indigo-400'
-              }`}
+              className={`h-full rounded-full transition-all duration-700 ${progress >= 100 ? 'bg-gradient-to-r from-emerald-400 to-teal-500'
+                : progress >= 60 ? 'bg-gradient-to-r from-blue-500 to-indigo-500'
+                  : 'bg-gradient-to-r from-blue-400 to-indigo-400'
+                }`}
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -315,7 +313,7 @@ export default function LongTermGoalDetail() {
           <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between">
             <div>
               <p className="text-white font-bold text-sm tracking-wide">✨ AI Task Cascade</p>
-              <p className="text-indigo-100 text-xs mt-0.5">Generate this week's daily tasks from your goal</p>
+              <p className="text-indigo-100 text-xs mt-0.5">Generate daily tasks for the week from your goal</p>
             </div>
             {addedCount > 0 && (
               <span className="rounded-full bg-white/20 px-3 py-1 text-xs font-bold text-white">
@@ -357,17 +355,15 @@ export default function LongTermGoalDetail() {
                   <button
                     key={i}
                     onClick={() => toggleTask(i)}
-                    className={`w-full flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
-                      selectedTasks.has(i)
-                        ? 'border-indigo-200 bg-indigo-50'
-                        : 'border-gray-100 bg-gray-50 opacity-60'
-                    }`}
+                    className={`w-full flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-all ${selectedTasks.has(i)
+                      ? 'border-indigo-200 bg-indigo-50'
+                      : 'border-gray-100 bg-gray-50 opacity-60'
+                      }`}
                   >
-                    <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 text-xs font-bold transition-all ${
-                      selectedTasks.has(i)
-                        ? 'border-indigo-500 bg-indigo-500 text-white'
-                        : 'border-gray-300 text-transparent'
-                    }`}>✓</div>
+                    <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 text-xs font-bold transition-all ${selectedTasks.has(i)
+                      ? 'border-indigo-500 bg-indigo-500 text-white'
+                      : 'border-gray-300 text-transparent'
+                      }`}>✓</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-gray-900">{task.title}</span>
