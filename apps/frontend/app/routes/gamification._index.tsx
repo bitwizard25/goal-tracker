@@ -10,6 +10,7 @@ export const loader: LoaderFunction = async ({ request }) => {
   const { connectDB } = await import('../lib/db.server');
   const { requireUserId } = await import('../services/auth.server');
   const { User } = await import('../models/User');
+  const { DailyTask } = await import('../models/Tasks');
 
   await connectDB();
   const userId = await requireUserId(request);
@@ -26,34 +27,62 @@ export const loader: LoaderFunction = async ({ request }) => {
   const levelNames = ['', 'Novice', 'Beginner', 'Apprentice', 'Intermediate', 'Advanced',
     'Expert', 'Master', 'Legend', 'Champion', 'Grandmaster'];
 
+  // Real total tasks completed
+  const totalTasksDone = await DailyTask.countDocuments({ user_id: userId, status: 'completed' });
+
+  // Real leaderboard — top 10 users by points + always include current user
+  const topUsers: any[] = await User.find({})
+    .select('_id email total_points streak_count')
+    .sort({ total_points: -1 })
+    .limit(10)
+    .lean();
+
+  let leaderboard = topUsers.map((u: any, i: number) => ({
+    rank: i + 1,
+    username: u.email.split('@')[0],
+    points: u.total_points ?? 0,
+    streak: u.streak_count ?? 0,
+    isMe: u._id.toString() === userId,
+  }));
+
+  // If current user didn't make top 10, append their actual rank
+  if (!leaderboard.some((e) => e.isMe)) {
+    const ahead = await User.countDocuments({ total_points: { $gt: user.total_points ?? 0 } });
+    leaderboard.push({
+      rank: ahead + 1,
+      username: user.email.split('@')[0],
+      points: user.total_points ?? 0,
+      streak: user.streak_count ?? 0,
+      isMe: true,
+    });
+  }
+
+  // Achievements — all based on real user data, no hardcoded dates
+  const achievements = [
+    { id: '1', title: 'First Steps',   description: 'Complete your first task',    icon: '👣', unlocked: totalTasksDone >= 1,              rarity: 'common'    },
+    { id: '2', title: 'Week Warrior',  description: 'Maintain a 7-day streak',     icon: '⚔️', unlocked: (user.longest_streak ?? 0) >= 7,  rarity: 'uncommon'  },
+    { id: '3', title: 'Task x10',      description: 'Complete 10 tasks',           icon: '✅', unlocked: totalTasksDone >= 10,             rarity: 'uncommon'  },
+    { id: '4', title: 'Level 5',       description: 'Reach level 5',               icon: '🌟', unlocked: (user.current_level ?? 1) >= 5,   rarity: 'rare'      },
+    { id: '5', title: 'Task x50',      description: 'Complete 50 tasks',           icon: '💯', unlocked: totalTasksDone >= 50,             rarity: 'rare'      },
+    { id: '6', title: 'Month Master',  description: 'Maintain a 30-day streak',    icon: '👑', unlocked: (user.longest_streak ?? 0) >= 30, rarity: 'epic'      },
+    { id: '7', title: 'Level 10',      description: 'Reach level 10',              icon: '🚀', unlocked: (user.current_level ?? 1) >= 10,  rarity: 'epic'      },
+    { id: '8', title: 'Unstoppable',   description: 'Maintain a 100-day streak',   icon: '🔥', unlocked: (user.longest_streak ?? 0) >= 100,rarity: 'legendary' },
+  ];
+
   return json({
     user: {
       email: user.email,
       total_points: user.total_points ?? 0,
       current_level: user.current_level ?? 1,
-      level_name: levelNames[user.current_level] ?? 'Grandmaster+',
+      level_name: levelNames[Math.min(user.current_level ?? 1, levelNames.length - 1)] ?? 'Grandmaster+',
       xp_percent: xpPercent,
       points_to_next: pointsToNext > 0 ? pointsToNext : 0,
       streak_count: user.streak_count ?? 0,
       longest_streak: user.longest_streak ?? 0,
+      tasks_completed: totalTasksDone,
     },
-    achievements: [
-      { id: '1', title: 'First Steps',    description: 'Complete your first task',     icon: '👣', unlocked: true,                                   rarity: 'common'   },
-      { id: '2', title: 'Week Warrior',   description: 'Maintain a 7-day streak',      icon: '⚔️', unlocked: (user.longest_streak ?? 0) >= 7,         rarity: 'uncommon' },
-      { id: '3', title: 'Perfect Day',    description: 'Complete all tasks in a day',  icon: '✨', unlocked: true,                                   rarity: 'uncommon' },
-      { id: '4', title: 'Level 5',        description: 'Reach level 5',                icon: '🌟', unlocked: (user.current_level ?? 1) >= 5,          rarity: 'rare'     },
-      { id: '5', title: 'Month Master',   description: 'Maintain a 30-day streak',     icon: '👑', unlocked: (user.longest_streak ?? 0) >= 30,        rarity: 'epic'     },
-      { id: '6', title: 'Level 10',       description: 'Reach level 10',               icon: '🚀', unlocked: (user.current_level ?? 1) >= 10,         rarity: 'epic'     },
-      { id: '7', title: 'Century Club',   description: 'Complete 100 tasks',           icon: '💯', unlocked: (user.total_points ?? 0) >= 500,         rarity: 'rare'     },
-      { id: '8', title: 'Unstoppable',    description: 'Maintain a 100-day streak',    icon: '🔥', unlocked: (user.longest_streak ?? 0) >= 100,       rarity: 'legendary'},
-    ],
-    leaderboard: [
-      { rank: 1, username: 'Alex J.',   points: 3500, streak: 45, isMe: false },
-      { rank: 2, username: 'Jordan K.', points: 3200, streak: 38, isMe: false },
-      { rank: 3, username: user.email?.split('@')[0] ?? 'You', points: user.total_points ?? 0, streak: user.streak_count ?? 0, isMe: true },
-      { rank: 4, username: 'Casey M.', points: 980, streak: 12, isMe: false },
-      { rank: 5, username: 'Morgan R.', points: 850, streak: 8,  isMe: false },
-    ],
+    achievements,
+    leaderboard,
   });
 };
 
@@ -129,17 +158,21 @@ export default function GamificationPage() {
 
             {/* Stats pills */}
             <div className="flex flex-wrap gap-3">
-              <div className="flex flex-col items-center rounded-2xl bg-white/20 backdrop-blur-sm px-6 py-4 min-w-[90px]">
+              <div className="flex flex-col items-center rounded-2xl bg-white/20 backdrop-blur-sm px-5 py-4 min-w-[80px]">
                 <span className="text-2xl font-extrabold">{user.total_points.toLocaleString()}</span>
-                <span className="mt-1 text-xs font-semibold text-white/70">Total Points</span>
+                <span className="mt-1 text-xs font-semibold text-white/70">Points</span>
               </div>
-              <div className="flex flex-col items-center rounded-2xl bg-white/20 backdrop-blur-sm px-6 py-4 min-w-[90px]">
-                <span className="text-2xl font-extrabold">{user.streak_count}🔥</span>
-                <span className="mt-1 text-xs font-semibold text-white/70">Day Streak</span>
+              <div className="flex flex-col items-center rounded-2xl bg-white/20 backdrop-blur-sm px-5 py-4 min-w-[80px]">
+                <span className="text-2xl font-extrabold">{user.streak_count} 🔥</span>
+                <span className="mt-1 text-xs font-semibold text-white/70">Streak</span>
               </div>
-              <div className="flex flex-col items-center rounded-2xl bg-white/20 backdrop-blur-sm px-6 py-4 min-w-[90px]">
+              <div className="flex flex-col items-center rounded-2xl bg-white/20 backdrop-blur-sm px-5 py-4 min-w-[80px]">
                 <span className="text-2xl font-extrabold">{user.longest_streak}</span>
                 <span className="mt-1 text-xs font-semibold text-white/70">Best Streak</span>
+              </div>
+              <div className="flex flex-col items-center rounded-2xl bg-white/20 backdrop-blur-sm px-5 py-4 min-w-[80px]">
+                <span className="text-2xl font-extrabold">{user.tasks_completed}</span>
+                <span className="mt-1 text-xs font-semibold text-white/70">Tasks Done</span>
               </div>
             </div>
           </div>
@@ -186,50 +219,70 @@ export default function GamificationPage() {
 
         {/* ── Leaderboard ── */}
         <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-5">Leaderboard</h2>
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-            <div className="divide-y divide-gray-100">
-              {leaderboard.map((entry: any) => (
-                <div
-                  key={entry.rank}
-                  className={`flex items-center gap-4 px-6 py-4 transition-colors ${
-                    entry.isMe ? 'bg-blue-50/80' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  {/* Rank */}
-                  <div className="w-10 text-center shrink-0">
-                    {entry.rank === 1 ? <span className="text-2xl">🥇</span>
-                    : entry.rank === 2 ? <span className="text-2xl">🥈</span>
-                    : entry.rank === 3 ? <span className="text-2xl">🥉</span>
-                    : <span className="text-sm font-bold text-gray-500">#{entry.rank}</span>}
-                  </div>
-
-                  {/* Avatar */}
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
-                    entry.isMe ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-gray-400 to-gray-500'
-                  }`}>
-                    {entry.username.charAt(0).toUpperCase()}
-                  </div>
-
-                  {/* Name */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-semibold text-sm truncate ${entry.isMe ? 'text-blue-700' : 'text-gray-900'}`}>
-                      {entry.username} {entry.isMe && <span className="text-xs font-normal text-blue-500">(you)</span>}
-                    </p>
-                    <p className="text-xs text-gray-500">{entry.streak} day streak 🔥</p>
-                  </div>
-
-                  {/* Points */}
-                  <div className="shrink-0 text-right">
-                    <p className={`text-sm font-extrabold ${entry.isMe ? 'text-blue-700' : 'text-gray-800'}`}>
-                      {entry.points.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-gray-400">pts</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xl font-bold text-gray-900">Leaderboard</h2>
+            <span className="text-xs font-semibold text-gray-400">{leaderboard.length} users</span>
           </div>
+
+          {leaderboard.length === 1 && leaderboard[0].isMe ? (
+            /* Solo state — only the current user exists */
+            <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+              <div className="text-4xl mb-3">🏆</div>
+              <p className="font-bold text-gray-900">You're #1!</p>
+              <p className="mt-1 text-sm text-gray-500">
+                You're the only one here so far. Share the app to compete with friends.
+              </p>
+              <div className="mt-5 inline-flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm text-gray-700 shadow-sm">
+                <span className="text-xl">🥇</span>
+                <span className="font-semibold">{leaderboard[0].username}</span>
+                <span className="text-gray-400">·</span>
+                <span className="font-bold text-blue-700">{leaderboard[0].points.toLocaleString()} pts</span>
+                <span className="text-gray-400">·</span>
+                <span>{leaderboard[0].streak} 🔥</span>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              <div className="divide-y divide-gray-100">
+                {leaderboard.map((entry: any) => (
+                  <div
+                    key={`${entry.rank}-${entry.username}`}
+                    className={`flex items-center gap-4 px-6 py-4 transition-colors ${
+                      entry.isMe ? 'bg-blue-50/80' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="w-10 text-center shrink-0">
+                      {entry.rank === 1 ? <span className="text-2xl">🥇</span>
+                      : entry.rank === 2 ? <span className="text-2xl">🥈</span>
+                      : entry.rank === 3 ? <span className="text-2xl">🥉</span>
+                      : <span className="text-sm font-bold text-gray-500">#{entry.rank}</span>}
+                    </div>
+
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${
+                      entry.isMe ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                    }`}>
+                      {entry.username.charAt(0).toUpperCase()}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-semibold text-sm truncate ${entry.isMe ? 'text-blue-700' : 'text-gray-900'}`}>
+                        {entry.username}
+                        {entry.isMe && <span className="ml-1.5 text-xs font-normal text-blue-500">(you)</span>}
+                      </p>
+                      <p className="text-xs text-gray-500">{entry.streak} day streak 🔥</p>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p className={`text-sm font-extrabold ${entry.isMe ? 'text-blue-700' : 'text-gray-800'}`}>
+                        {entry.points.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-400">pts</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Level Roadmap ── */}
