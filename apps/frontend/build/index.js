@@ -883,7 +883,7 @@ import {
 } from "@remix-run/react";
 
 // app/styles/globals.css
-var globals_default = "/build/_assets/globals-ZKOESVF4.css";
+var globals_default = "/build/_assets/globals-XS5FPEVX.css";
 
 // app/root.tsx
 await init_db_server();
@@ -2067,22 +2067,38 @@ function AnalyticsPage() {
 // app/routes/dashboard._index.tsx
 var dashboard_index_exports = {};
 __export(dashboard_index_exports, {
+  action: () => action4,
   default: () => DashboardPage,
   loader: () => loader4,
   meta: () => meta7
 });
-import { useLoaderData as useLoaderData3, Link } from "@remix-run/react";
 import { useState as useState4, useEffect } from "react";
+import { useLoaderData as useLoaderData3, Link, useFetcher } from "@remix-run/react";
+import { json } from "@remix-run/node";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { jsx as jsx8, jsxs as jsxs7 } from "react/jsx-runtime";
 var meta7 = () => [
   { title: "Dashboard - Goal Tracker" }
 ], loader4 = async ({ request }) => {
-  let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports));
+  let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports)), { DailyTask: DailyTask2 } = await Promise.resolve().then(() => (init_Tasks(), Tasks_exports)), { UserStats: UserStats2 } = await Promise.resolve().then(() => (init_Analytics(), Analytics_exports));
   await connectDB2();
   let userId = await requireUserId2(request), user = await User2.findById(userId).select("-password_hash").lean();
   if (!user)
     throw new Response("Not Found", { status: 404 });
-  return {
+  let startOfDay = /* @__PURE__ */ new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  let endOfDay = /* @__PURE__ */ new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+  let tasks = await DailyTask2.find({
+    user_id: userId,
+    due_date: { $gte: startOfDay, $lte: endOfDay }
+  }).sort({ status: 1, created_at: -1 }).lean(), todayStats = await UserStats2.findOne({
+    user_id: userId,
+    date: { $gte: startOfDay, $lte: endOfDay }
+  }).lean();
+  return json({
     user: {
       email: user.email,
       total_points: user.total_points,
@@ -2090,39 +2106,176 @@ var meta7 = () => [
       streak_count: user.streak_count
     },
     stats: {
-      tasks_today: 0,
-      tasks_completed_today: 0,
-      mood_average: 7,
-      energy_average: 6
+      tasks_today: tasks.length,
+      tasks_completed_today: tasks.filter((t) => t.status === "completed").length,
+      mood_average: todayStats?.mood_average || null,
+      energy_average: todayStats?.energy_average || null
     },
-    recentTasks: []
-  };
+    recentTasks: tasks.map((t) => ({
+      id: t._id.toString(),
+      title: t.title,
+      status: t.status,
+      difficulty_level: t.difficulty_level
+    }))
+  });
+}, action4 = async ({ request }) => {
+  let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { requireUserId: requireUserId2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports)), { DailyTask: DailyTask2 } = await Promise.resolve().then(() => (init_Tasks(), Tasks_exports)), { UserStats: UserStats2 } = await Promise.resolve().then(() => (init_Analytics(), Analytics_exports));
+  await connectDB2();
+  let userId = await requireUserId2(request), formData = await request.formData(), actionType = formData.get("_action"), startOfDay = /* @__PURE__ */ new Date();
+  if (startOfDay.setHours(0, 0, 0, 0), actionType === "update_metrics") {
+    let energy = formData.get("energy"), mood = formData.get("mood"), stats = await UserStats2.findOne({ user_id: userId, date: { $gte: startOfDay } });
+    return stats || (stats = new UserStats2({ user_id: userId, date: /* @__PURE__ */ new Date() })), energy && (stats.energy_average = Number(energy)), mood && (stats.mood_average = Number(mood)), await stats.save(), json({ success: !0 });
+  }
+  if (actionType === "update_task_status") {
+    let taskId = formData.get("taskId"), status = formData.get("status");
+    return taskId && status && await DailyTask2.findOneAndUpdate({ _id: taskId, user_id: userId }, { status }), json({ success: !0 });
+  }
+  return json({ success: !1 }, { status: 400 });
 };
+function SortableTaskItem({ task, isDone }) {
+  let { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id }), style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 100 : 1,
+    opacity: isDragging ? 0.8 : 1
+  };
+  return /* @__PURE__ */ jsx8(
+    "div",
+    {
+      ref: setNodeRef,
+      style,
+      ...attributes,
+      ...listeners,
+      className: `group relative flex cursor-grab items-center justify-between rounded-xl border p-4 shadow-sm transition-all hover:shadow-md ${isDone ? "border-emerald-100 bg-emerald-50/50" : "border-gray-100 bg-white hover:border-blue-100"}`,
+      children: /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-4", children: [
+        /* @__PURE__ */ jsx8("div", { className: `flex h-8 w-8 items-center justify-center rounded-lg ${isDone ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-400"}`, children: /* @__PURE__ */ jsx8("svg", { className: "h-4 w-4", fill: "none", viewBox: "0 0 24 24", strokeWidth: 2, stroke: "currentColor", children: /* @__PURE__ */ jsx8("path", { strokeLinecap: "round", strokeLinejoin: "round", d: isDone ? "M5 13l4 4L19 7" : "M4 6h16M4 12h16M4 18h16" }) }) }),
+        /* @__PURE__ */ jsxs7("div", { children: [
+          /* @__PURE__ */ jsx8("h4", { className: `font-medium ${isDone ? "text-emerald-900 line-through opacity-70" : "text-gray-900"}`, children: task.title }),
+          /* @__PURE__ */ jsxs7("span", { className: "text-xs text-gray-500", children: [
+            "Difficulty: ",
+            task.difficulty_level,
+            "/5"
+          ] })
+        ] })
+      ] })
+    }
+  );
+}
+function TaskBoard({ tasks }) {
+  let fetcher = useFetcher(), [localTasks, setLocalTasks] = useState4(tasks), sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  useEffect(() => {
+    setLocalTasks(tasks);
+  }, [tasks]);
+  let pendingTasks = localTasks.filter((t) => t.status !== "completed"), completedTasks = localTasks.filter((t) => t.status === "completed");
+  return /* @__PURE__ */ jsx8(DndContext, { sensors, collisionDetection: closestCenter, onDragEnd: (event) => {
+    let { active, over } = event;
+    if (!over)
+      return;
+    let taskId = active.id, overId = over.id, task = localTasks.find((t) => t.id === taskId);
+    if (!task)
+      return;
+    let newStatus = task.status;
+    if (overId === "col-pending" && task.status === "completed")
+      newStatus = "pending";
+    else if (overId === "col-completed" && task.status !== "completed")
+      newStatus = "completed";
+    else {
+      let overTask = localTasks.find((t) => t.id === overId);
+      overTask && overTask.status !== task.status && (newStatus = overTask.status);
+    }
+    if (newStatus !== task.status) {
+      setLocalTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
+      let formData = new FormData();
+      formData.append("_action", "update_task_status"), formData.append("taskId", taskId), formData.append("status", newStatus), fetcher.submit(formData, { method: "post" });
+    }
+  }, children: /* @__PURE__ */ jsxs7("div", { className: "mt-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:gap-8", children: [
+    /* @__PURE__ */ jsxs7("div", { id: "col-pending", className: "flex flex-col gap-4 rounded-2xl bg-gray-50/50 p-6 border border-gray-100", children: [
+      /* @__PURE__ */ jsxs7("div", { className: "flex items-center justify-between", children: [
+        /* @__PURE__ */ jsx8("h2", { className: "text-lg font-bold text-gray-900", children: "To Do" }),
+        /* @__PURE__ */ jsx8("span", { className: "rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700", children: pendingTasks.length })
+      ] }),
+      /* @__PURE__ */ jsx8(SortableContext, { id: "col-pending", items: pendingTasks.map((t) => t.id), strategy: verticalListSortingStrategy, children: /* @__PURE__ */ jsx8("div", { className: "flex min-h-[150px] flex-col gap-3 rounded-xl", children: pendingTasks.length === 0 ? /* @__PURE__ */ jsx8("div", { className: "flex flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white p-6 shadow-sm text-sm text-gray-400", children: /* @__PURE__ */ jsx8("p", { children: "All caught up!" }) }) : pendingTasks.map((task) => /* @__PURE__ */ jsx8(SortableTaskItem, { task, isDone: !1 }, task.id)) }) })
+    ] }),
+    /* @__PURE__ */ jsxs7("div", { id: "col-completed", className: "flex flex-col gap-4 rounded-2xl bg-emerald-50/30 p-6 border border-emerald-50/50", children: [
+      /* @__PURE__ */ jsxs7("div", { className: "flex items-center justify-between", children: [
+        /* @__PURE__ */ jsx8("h2", { className: "text-lg font-bold text-gray-900", children: "Completed" }),
+        /* @__PURE__ */ jsx8("span", { className: "rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700", children: completedTasks.length })
+      ] }),
+      /* @__PURE__ */ jsx8(SortableContext, { id: "col-completed", items: completedTasks.map((t) => t.id), strategy: verticalListSortingStrategy, children: /* @__PURE__ */ jsx8("div", { className: "flex min-h-[150px] flex-col gap-3 rounded-xl", children: completedTasks.length === 0 ? /* @__PURE__ */ jsx8("div", { className: "flex flex-1 items-center justify-center rounded-xl border border-dashed border-emerald-200 bg-white/50 p-6 shadow-sm text-sm text-emerald-500/60", children: /* @__PURE__ */ jsx8("p", { children: "Drop tasks here to complete them" }) }) : completedTasks.map((task) => /* @__PURE__ */ jsx8(SortableTaskItem, { task, isDone: !0 }, task.id)) }) })
+    ] })
+  ] }) });
+}
+function MetricSlider({ title, icon, value, type, gradientClass, colorClass }) {
+  let fetcher = useFetcher(), [localValue, setLocalValue] = useState4(value || 5), isPristine = value === null;
+  useEffect(() => {
+    value !== null && setLocalValue(value);
+  }, [value]);
+  let handleChange = (e) => {
+    setLocalValue(Number(e.target.value));
+  }, handleRelease = () => {
+    if (localValue === value)
+      return;
+    let formData = new FormData();
+    formData.append("_action", "update_metrics"), formData.append(type, localValue.toString()), fetcher.submit(formData, { method: "post" });
+  };
+  return /* @__PURE__ */ jsxs7("div", { className: "group flex-1 rounded-2xl bg-white p-6 shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300", children: [
+    /* @__PURE__ */ jsxs7("div", { className: "flex items-center justify-between", children: [
+      /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-3", children: [
+        /* @__PURE__ */ jsx8("div", { className: `flex h-10 w-10 items-center justify-center rounded-xl text-white text-lg bg-gradient-to-br ${gradientClass}`, children: /* @__PURE__ */ jsx8("span", { className: "text-xl", children: icon }) }),
+        /* @__PURE__ */ jsx8("h2", { className: "text-lg font-bold text-gray-900", children: title })
+      ] }),
+      isPristine ? /* @__PURE__ */ jsx8("span", { className: "text-sm font-medium text-gray-400", children: "Not Tracked" }) : /* @__PURE__ */ jsxs7("span", { className: `text-2xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r ${gradientClass}`, children: [
+        localValue,
+        "/10"
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxs7("div", { className: "mt-6", children: [
+      /* @__PURE__ */ jsx8(
+        "input",
+        {
+          type: "range",
+          min: "1",
+          max: "10",
+          value: localValue,
+          onChange: handleChange,
+          onMouseUp: handleRelease,
+          onTouchEnd: handleRelease,
+          className: "w-full h-2 rounded-lg appearance-none cursor-pointer bg-gray-100",
+          style: { accentColor: "currentColor" }
+        }
+      ),
+      /* @__PURE__ */ jsxs7("div", { className: "mt-2 flex justify-between text-xs text-gray-400 font-medium tracking-wide", children: [
+        /* @__PURE__ */ jsx8("span", { children: "Low" }),
+        /* @__PURE__ */ jsx8("span", { children: isPristine ? "Drag to track" : "High" })
+      ] })
+    ] })
+  ] });
+}
 function DashboardPage() {
-  let data = useLoaderData3(), { user, stats } = data, [greeting, setGreeting] = useState4("Welcome");
-  return useEffect(() => {
-    let hour = (/* @__PURE__ */ new Date()).getHours();
-    hour < 12 ? setGreeting("Good morning") : hour < 17 ? setGreeting("Good afternoon") : setGreeting("Good evening");
-  }, []), /* @__PURE__ */ jsxs7("div", { className: "min-h-screen bg-gray-50", children: [
-    /* @__PURE__ */ jsx8("div", { className: "border-b border-gray-100 bg-white", children: /* @__PURE__ */ jsx8("div", { className: "mx-auto max-w-6xl px-6 py-6", children: /* @__PURE__ */ jsxs7("div", { className: "flex items-center justify-between", children: [
+  let data = useLoaderData3(), { user, stats, recentTasks } = data;
+  return /* @__PURE__ */ jsxs7("div", { className: "min-h-screen bg-gray-50/30", children: [
+    /* @__PURE__ */ jsx8("div", { className: "border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-10", children: /* @__PURE__ */ jsx8("div", { className: "mx-auto max-w-6xl px-6 py-5", children: /* @__PURE__ */ jsxs7("div", { className: "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between", children: [
       /* @__PURE__ */ jsxs7("div", { children: [
-        /* @__PURE__ */ jsxs7("h1", { className: "text-2xl font-bold text-gray-900", children: [
-          greeting,
+        /* @__PURE__ */ jsxs7("h1", { className: "text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent", children: [
+          (() => {
+            let hour = (/* @__PURE__ */ new Date()).getHours();
+            return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+          })(),
           " \u{1F44B}"
         ] }),
-        /* @__PURE__ */ jsx8("p", { className: "mt-1 text-sm text-gray-500", children: user.email })
+        /* @__PURE__ */ jsx8("p", { className: "mt-1 text-sm font-medium text-gray-500", children: user.email })
       ] }),
       /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-3", children: [
-        /* @__PURE__ */ jsxs7("div", { className: "hidden sm:flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 px-4 py-2", children: [
+        /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-2 rounded-full bg-amber-50 border border-amber-100 px-4 py-2 shadow-sm transition-transform hover:scale-105", children: [
           /* @__PURE__ */ jsx8("span", { className: "text-lg", children: "\u{1F525}" }),
-          /* @__PURE__ */ jsxs7("span", { className: "text-sm font-semibold text-amber-700", children: [
+          /* @__PURE__ */ jsxs7("span", { className: "text-sm font-bold text-amber-700", children: [
             user.streak_count,
             " day streak"
           ] })
         ] }),
-        /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 px-4 py-2", children: [
+        /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-2 rounded-full bg-blue-50 border border-blue-100 px-4 py-2 shadow-sm transition-transform hover:scale-105", children: [
           /* @__PURE__ */ jsx8("span", { className: "text-lg", children: "\u2B50" }),
-          /* @__PURE__ */ jsxs7("span", { className: "text-sm font-semibold text-blue-700", children: [
+          /* @__PURE__ */ jsxs7("span", { className: "text-sm font-bold text-blue-700", children: [
             "Level ",
             user.current_level
           ] })
@@ -2130,168 +2283,66 @@ function DashboardPage() {
       ] })
     ] }) }) }),
     /* @__PURE__ */ jsxs7("div", { className: "mx-auto max-w-6xl px-6 py-8", children: [
-      /* @__PURE__ */ jsxs7("div", { className: "grid grid-cols-2 gap-4 md:grid-cols-4", children: [
-        /* @__PURE__ */ jsx8("div", { className: "group rounded-2xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-100 transition-all duration-300", children: /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-3", children: [
-          /* @__PURE__ */ jsx8("div", { className: "flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-lg shadow-lg shadow-blue-500/20", children: "\u2B50" }),
-          /* @__PURE__ */ jsxs7("div", { children: [
-            /* @__PURE__ */ jsx8("p", { className: "text-xs font-medium text-gray-500 uppercase tracking-wider", children: "Points" }),
-            /* @__PURE__ */ jsx8("p", { className: "text-2xl font-bold text-gray-900", children: user.total_points.toLocaleString() })
-          ] })
-        ] }) }),
-        /* @__PURE__ */ jsx8("div", { className: "group rounded-2xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-emerald-100 transition-all duration-300", children: /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-3", children: [
-          /* @__PURE__ */ jsx8("div", { className: "flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-white text-lg shadow-lg shadow-emerald-500/20", children: "\u{1F3C5}" }),
-          /* @__PURE__ */ jsxs7("div", { children: [
-            /* @__PURE__ */ jsx8("p", { className: "text-xs font-medium text-gray-500 uppercase tracking-wider", children: "Level" }),
-            /* @__PURE__ */ jsx8("p", { className: "text-2xl font-bold text-gray-900", children: user.current_level })
-          ] })
-        ] }) }),
-        /* @__PURE__ */ jsx8("div", { className: "group rounded-2xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-orange-100 transition-all duration-300", children: /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-3", children: [
-          /* @__PURE__ */ jsx8("div", { className: "flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white text-lg shadow-lg shadow-orange-500/20", children: "\u{1F525}" }),
-          /* @__PURE__ */ jsxs7("div", { children: [
-            /* @__PURE__ */ jsx8("p", { className: "text-xs font-medium text-gray-500 uppercase tracking-wider", children: "Streak" }),
-            /* @__PURE__ */ jsxs7("p", { className: "text-2xl font-bold text-gray-900", children: [
-              user.streak_count,
-              /* @__PURE__ */ jsx8("span", { className: "text-sm font-normal text-gray-400 ml-1", children: "days" })
-            ] })
-          ] })
-        ] }) }),
-        /* @__PURE__ */ jsx8("div", { className: "group rounded-2xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-purple-100 transition-all duration-300", children: /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-3", children: [
-          /* @__PURE__ */ jsx8("div", { className: "flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 text-white text-lg shadow-lg shadow-purple-500/20", children: "\u2705" }),
-          /* @__PURE__ */ jsxs7("div", { children: [
-            /* @__PURE__ */ jsx8("p", { className: "text-xs font-medium text-gray-500 uppercase tracking-wider", children: "Today" }),
-            /* @__PURE__ */ jsxs7("p", { className: "text-2xl font-bold text-gray-900", children: [
-              stats.tasks_completed_today,
-              /* @__PURE__ */ jsxs7("span", { className: "text-sm font-normal text-gray-400", children: [
-                "/",
-                stats.tasks_today
+      /* @__PURE__ */ jsxs7("div", { className: "grid grid-cols-2 gap-4 md:grid-cols-4 lg:gap-6", children: [
+        /* @__PURE__ */ jsxs7("div", { className: "group rounded-2xl bg-white p-5 shadow-sm border border-gray-100 transition-all hover:shadow-md hover:border-blue-100", children: [
+          /* @__PURE__ */ jsx8("p", { className: "text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 group-hover:text-blue-500 transition-colors", children: "Total Points" }),
+          /* @__PURE__ */ jsx8("p", { className: "text-4xl font-extrabold text-gray-900", children: user.total_points.toLocaleString() })
+        ] }),
+        /* @__PURE__ */ jsxs7("div", { className: "group rounded-2xl bg-white p-5 shadow-sm border border-gray-100 transition-all hover:shadow-md hover:border-emerald-100", children: [
+          /* @__PURE__ */ jsx8("p", { className: "text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 group-hover:text-emerald-500 transition-colors", children: "Current Level" }),
+          /* @__PURE__ */ jsx8("p", { className: "text-4xl font-extrabold text-gray-900", children: user.current_level })
+        ] }),
+        /* @__PURE__ */ jsxs7("div", { className: "col-span-2 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-6 shadow-xl shadow-indigo-500/20 text-white relative overflow-hidden flex items-center justify-between", children: [
+          /* @__PURE__ */ jsxs7("div", { className: "z-10", children: [
+            /* @__PURE__ */ jsx8("p", { className: "text-xs font-bold text-indigo-100 uppercase tracking-wider mb-2", children: "Today's Progress" }),
+            /* @__PURE__ */ jsxs7("div", { className: "flex items-baseline gap-2", children: [
+              /* @__PURE__ */ jsx8("p", { className: "text-5xl font-extrabold", children: stats.tasks_completed_today }),
+              /* @__PURE__ */ jsxs7("p", { className: "text-base text-indigo-200 font-bold tracking-wide", children: [
+                "/ ",
+                stats.tasks_today || 0,
+                " completed"
               ] })
             ] })
-          ] })
-        ] }) })
-      ] }),
-      /* @__PURE__ */ jsxs7("div", { className: "mt-8 grid grid-cols-1 gap-6 md:grid-cols-2", children: [
-        /* @__PURE__ */ jsxs7("div", { className: "rounded-2xl bg-white p-6 shadow-sm border border-gray-100", children: [
-          /* @__PURE__ */ jsxs7("div", { className: "flex items-center justify-between", children: [
-            /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-3", children: [
-              /* @__PURE__ */ jsx8("div", { className: "flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-blue-500 text-white text-lg", children: "\u26A1" }),
-              /* @__PURE__ */ jsx8("h2", { className: "text-lg font-bold text-gray-900", children: "Energy Level" })
-            ] }),
-            /* @__PURE__ */ jsxs7("span", { className: "text-2xl font-extrabold bg-gradient-to-r from-cyan-500 to-blue-600 bg-clip-text text-transparent", children: [
-              stats.energy_average,
-              "/10"
-            ] })
           ] }),
-          /* @__PURE__ */ jsxs7("div", { className: "mt-5", children: [
-            /* @__PURE__ */ jsx8("div", { className: "h-3 w-full rounded-full bg-gray-100 overflow-hidden", children: /* @__PURE__ */ jsx8(
-              "div",
-              {
-                className: "h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-600 transition-all duration-1000",
-                style: { width: `${stats.energy_average / 10 * 100}%` }
-              }
-            ) }),
-            /* @__PURE__ */ jsxs7("div", { className: "mt-2 flex justify-between text-xs text-gray-400", children: [
-              /* @__PURE__ */ jsx8("span", { children: "Low" }),
-              /* @__PURE__ */ jsx8("span", { children: "High" })
-            ] })
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxs7("div", { className: "rounded-2xl bg-white p-6 shadow-sm border border-gray-100", children: [
-          /* @__PURE__ */ jsxs7("div", { className: "flex items-center justify-between", children: [
-            /* @__PURE__ */ jsxs7("div", { className: "flex items-center gap-3", children: [
-              /* @__PURE__ */ jsx8("div", { className: "flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-green-500 text-white text-lg", children: "\u{1F60A}" }),
-              /* @__PURE__ */ jsx8("h2", { className: "text-lg font-bold text-gray-900", children: "Mood" })
-            ] }),
-            /* @__PURE__ */ jsxs7("span", { className: "text-2xl font-extrabold bg-gradient-to-r from-emerald-500 to-green-600 bg-clip-text text-transparent", children: [
-              stats.mood_average,
-              "/10"
-            ] })
-          ] }),
-          /* @__PURE__ */ jsxs7("div", { className: "mt-5", children: [
-            /* @__PURE__ */ jsx8("div", { className: "h-3 w-full rounded-full bg-gray-100 overflow-hidden", children: /* @__PURE__ */ jsx8(
-              "div",
-              {
-                className: "h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-600 transition-all duration-1000",
-                style: { width: `${stats.mood_average / 10 * 100}%` }
-              }
-            ) }),
-            /* @__PURE__ */ jsxs7("div", { className: "mt-2 flex justify-between text-xs text-gray-400", children: [
-              /* @__PURE__ */ jsx8("span", { children: "Low" }),
-              /* @__PURE__ */ jsx8("span", { children: "High" })
-            ] })
-          ] })
+          /* @__PURE__ */ jsx8("div", { className: "z-10 h-16 w-16 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md shadow-inner", children: /* @__PURE__ */ jsx8("span", { className: "text-3xl drop-shadow-lg", children: "\u{1F3C6}" }) }),
+          /* @__PURE__ */ jsx8("div", { className: "absolute -right-12 -top-12 h-40 w-40 rounded-full bg-white/10 blur-3xl" }),
+          /* @__PURE__ */ jsx8("div", { className: "absolute -left-12 -bottom-12 h-32 w-32 rounded-full bg-purple-400/20 blur-2xl" })
         ] })
       ] }),
-      /* @__PURE__ */ jsxs7("div", { className: "mt-8", children: [
-        /* @__PURE__ */ jsxs7("div", { className: "flex items-center justify-between", children: [
-          /* @__PURE__ */ jsx8("h2", { className: "text-lg font-bold text-gray-900", children: "Today's Tasks" }),
-          /* @__PURE__ */ jsxs7(Link, { to: "/tasks/new", className: "inline-flex items-center gap-1 rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-100 transition", children: [
+      /* @__PURE__ */ jsxs7("div", { className: "mt-10", children: [
+        /* @__PURE__ */ jsx8("h2", { className: "text-2xl font-extrabold text-gray-900 mb-6 drop-shadow-sm", children: "Log Your State" }),
+        /* @__PURE__ */ jsxs7("div", { className: "grid grid-cols-1 gap-6 lg:grid-cols-2", children: [
+          /* @__PURE__ */ jsx8(
+            MetricSlider,
+            {
+              title: "Energy Level",
+              icon: "\u26A1",
+              value: stats.energy_average,
+              type: "energy",
+              gradientClass: "from-cyan-400 to-blue-500"
+            }
+          ),
+          /* @__PURE__ */ jsx8(
+            MetricSlider,
+            {
+              title: "Mood",
+              icon: "\u{1F60A}",
+              value: stats.mood_average,
+              type: "mood",
+              gradientClass: "from-emerald-400 to-green-500"
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxs7("div", { className: "mt-12", children: [
+        /* @__PURE__ */ jsxs7("div", { className: "flex items-center justify-between border-b-2 border-gray-100 pb-4", children: [
+          /* @__PURE__ */ jsx8("h2", { className: "text-2xl font-extrabold text-gray-900 drop-shadow-sm", children: "Task Board" }),
+          /* @__PURE__ */ jsxs7(Link, { to: "/tasks/new", className: "inline-flex items-center justify-center gap-2 rounded-full bg-gray-900 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-gray-900/20 hover:bg-gray-800 hover:shadow-gray-900/30 hover:-translate-y-0.5 transition-all", children: [
             /* @__PURE__ */ jsx8("span", { children: "+" }),
-            " Add Task"
+            " New Task"
           ] })
         ] }),
-        /* @__PURE__ */ jsxs7("div", { className: "mt-4 rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm", children: [
-          /* @__PURE__ */ jsx8("div", { className: "text-4xl", children: "\u{1F4CB}" }),
-          /* @__PURE__ */ jsx8("h3", { className: "mt-3 text-lg font-semibold text-gray-900", children: "No tasks for today" }),
-          /* @__PURE__ */ jsx8("p", { className: "mt-1 text-sm text-gray-500", children: "Create your first task to get started!" }),
-          /* @__PURE__ */ jsxs7(
-            Link,
-            {
-              to: "/goals/short-term/new",
-              className: "mt-4 inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-105 transition-all duration-200",
-              children: [
-                "Create a Goal",
-                /* @__PURE__ */ jsx8("svg", { className: "h-4 w-4", fill: "none", viewBox: "0 0 24 24", strokeWidth: 2, stroke: "currentColor", children: /* @__PURE__ */ jsx8("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" }) })
-              ]
-            }
-          )
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxs7("div", { className: "mt-8", children: [
-        /* @__PURE__ */ jsx8("h2", { className: "text-lg font-bold text-gray-900 mb-4", children: "Quick Actions" }),
-        /* @__PURE__ */ jsxs7("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-3", children: [
-          /* @__PURE__ */ jsxs7(
-            Link,
-            {
-              to: "/goals/long-term/new",
-              className: "group flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-100 hover:-translate-y-0.5 transition-all duration-300",
-              children: [
-                /* @__PURE__ */ jsx8("div", { className: "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xl shadow-lg shadow-blue-500/20", children: "\u{1F3AF}" }),
-                /* @__PURE__ */ jsxs7("div", { children: [
-                  /* @__PURE__ */ jsx8("h3", { className: "font-semibold text-gray-900 group-hover:text-blue-600 transition", children: "Long-term Goal" }),
-                  /* @__PURE__ */ jsx8("p", { className: "text-xs text-gray-500", children: "Build your vision" })
-                ] })
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxs7(
-            Link,
-            {
-              to: "/goals/short-term/new",
-              className: "group flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-emerald-100 hover:-translate-y-0.5 transition-all duration-300",
-              children: [
-                /* @__PURE__ */ jsx8("div", { className: "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-teal-600 text-white text-xl shadow-lg shadow-emerald-500/20", children: "\u{1F4C5}" }),
-                /* @__PURE__ */ jsxs7("div", { children: [
-                  /* @__PURE__ */ jsx8("h3", { className: "font-semibold text-gray-900 group-hover:text-emerald-600 transition", children: "Short-term Goal" }),
-                  /* @__PURE__ */ jsx8("p", { className: "text-xs text-gray-500", children: "Set milestones" })
-                ] })
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxs7(
-            Link,
-            {
-              to: "/analytics",
-              className: "group flex items-center gap-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100 hover:shadow-md hover:border-purple-100 hover:-translate-y-0.5 transition-all duration-300",
-              children: [
-                /* @__PURE__ */ jsx8("div", { className: "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 text-white text-xl shadow-lg shadow-purple-500/20", children: "\u{1F4CA}" }),
-                /* @__PURE__ */ jsxs7("div", { children: [
-                  /* @__PURE__ */ jsx8("h3", { className: "font-semibold text-gray-900 group-hover:text-purple-600 transition", children: "Analytics" }),
-                  /* @__PURE__ */ jsx8("p", { className: "text-xs text-gray-500", children: "Track progress" })
-                ] })
-              ]
-            }
-          )
-        ] })
+        /* @__PURE__ */ jsx8(TaskBoard, { tasks: recentTasks })
       ] })
     ] })
   ] });
@@ -2300,7 +2351,7 @@ function DashboardPage() {
 // app/routes/auth.register.tsx
 var auth_register_exports = {};
 __export(auth_register_exports, {
-  action: () => action4,
+  action: () => action5,
   default: () => RegisterPage,
   meta: () => meta8
 });
@@ -2309,7 +2360,7 @@ import { useState as useState5 } from "react";
 import { jsx as jsx9, jsxs as jsxs8 } from "react/jsx-runtime";
 var meta8 = () => [
   { title: "Register - Goal Tracker" }
-], action4 = async ({ request }) => {
+], action5 = async ({ request }) => {
   let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports)), { UserPsychologyProfile: UserPsychologyProfile2 } = await Promise.resolve().then(() => (init_Analytics(), Analytics_exports)), { hashPassword: hashPassword2, isValidEmail: isValidEmail2, validatePasswordStrength: validatePasswordStrength2 } = await Promise.resolve().then(() => (init_auth(), auth_exports)), { createUserSession: createUserSession2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports));
   if (await connectDB2(), request.method !== "POST")
     return null;
@@ -2676,10 +2727,10 @@ function GoalsPage() {
 // app/routes/auth.logout.tsx
 var auth_logout_exports = {};
 __export(auth_logout_exports, {
-  action: () => action5,
+  action: () => action6,
   loader: () => loader6
 });
-var action5 = async ({ request }) => {
+var action6 = async ({ request }) => {
   let { logout: logout2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports));
   return logout2(request);
 }, loader6 = async () => {
@@ -2690,7 +2741,7 @@ var action5 = async ({ request }) => {
 // app/routes/auth.login.tsx
 var auth_login_exports = {};
 __export(auth_login_exports, {
-  action: () => action6,
+  action: () => action7,
   default: () => LoginPage,
   meta: () => meta10
 });
@@ -2699,7 +2750,7 @@ import { useState as useState7 } from "react";
 import { jsx as jsx11, jsxs as jsxs10 } from "react/jsx-runtime";
 var meta10 = () => [
   { title: "Login - Goal Tracker" }
-], action6 = async ({ request }) => {
+], action7 = async ({ request }) => {
   let { connectDB: connectDB2 } = await init_db_server().then(() => db_server_exports), { User: User2 } = await Promise.resolve().then(() => (init_User(), User_exports)), { verifyPassword: verifyPassword2 } = await Promise.resolve().then(() => (init_auth(), auth_exports)), { createUserSession: createUserSession2 } = await Promise.resolve().then(() => (init_auth_server(), auth_server_exports));
   if (await connectDB2(), request.method !== "POST")
     return null;
@@ -3132,7 +3183,7 @@ function AuthLayout() {
 }
 
 // server-assets-manifest:@remix-run/dev/assets-manifest
-var assets_manifest_default = { entry: { module: "/build/entry.client-WIDY3VBM.js", imports: ["/build/_shared/chunk-DDZXQ444.js", "/build/_shared/chunk-2QEWK57A.js"] }, routes: { root: { id: "root", parentId: void 0, path: "", index: void 0, caseSensitive: void 0, module: "/build/root-DQ2FAWST.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/_index": { id: "routes/_index", parentId: "root", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/_index-53KCYMOT.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/analytics._index": { id: "routes/analytics._index", parentId: "root", path: "analytics", index: !0, caseSensitive: void 0, module: "/build/routes/analytics._index-ORE4YXVE.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth": { id: "routes/auth", parentId: "root", path: "auth", index: void 0, caseSensitive: void 0, module: "/build/routes/auth-MT5GNURR.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.login": { id: "routes/auth.login", parentId: "routes/auth", path: "login", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.login-ZK3YV4LG.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.logout": { id: "routes/auth.logout", parentId: "routes/auth", path: "logout", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.logout-RT7NNDUM.js", imports: void 0, hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.register": { id: "routes/auth.register", parentId: "routes/auth", path: "register", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.register-G5RSIWBB.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard": { id: "routes/dashboard", parentId: "root", path: "dashboard", index: void 0, caseSensitive: void 0, module: "/build/routes/dashboard-GPXYRT3J.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard._index": { id: "routes/dashboard._index", parentId: "routes/dashboard", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/dashboard._index-X2D67ZPQ.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/gamification._index": { id: "routes/gamification._index", parentId: "root", path: "gamification", index: !0, caseSensitive: void 0, module: "/build/routes/gamification._index-F6MZCF4M.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals._index": { id: "routes/goals._index", parentId: "root", path: "goals", index: !0, caseSensitive: void 0, module: "/build/routes/goals._index-NFEUH6NE.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.long-term.new": { id: "routes/goals.long-term.new", parentId: "root", path: "goals/long-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.long-term.new-2CHOG542.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.short-term.new": { id: "routes/goals.short-term.new", parentId: "root", path: "goals/short-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.short-term.new-KNJHOF7D.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/tasks.complete.$taskId": { id: "routes/tasks.complete.$taskId", parentId: "root", path: "tasks/complete/:taskId", index: void 0, caseSensitive: void 0, module: "/build/routes/tasks.complete.$taskId-PEHVDCQK.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 } }, version: "397442b4", hmr: void 0, url: "/build/manifest-397442B4.js" };
+var assets_manifest_default = { entry: { module: "/build/entry.client-RJQYT24D.js", imports: ["/build/_shared/chunk-AOAPHHAE.js", "/build/_shared/chunk-2QEWK57A.js"] }, routes: { root: { id: "root", parentId: void 0, path: "", index: void 0, caseSensitive: void 0, module: "/build/root-KHIJF5US.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/_index": { id: "routes/_index", parentId: "root", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/_index-SVOKK25M.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/analytics._index": { id: "routes/analytics._index", parentId: "root", path: "analytics", index: !0, caseSensitive: void 0, module: "/build/routes/analytics._index-QHDXKNZJ.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth": { id: "routes/auth", parentId: "root", path: "auth", index: void 0, caseSensitive: void 0, module: "/build/routes/auth-75I6IVAL.js", imports: void 0, hasAction: !1, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.login": { id: "routes/auth.login", parentId: "routes/auth", path: "login", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.login-TXYHVVEK.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.logout": { id: "routes/auth.logout", parentId: "routes/auth", path: "logout", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.logout-RT7NNDUM.js", imports: void 0, hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/auth.register": { id: "routes/auth.register", parentId: "routes/auth", path: "register", index: void 0, caseSensitive: void 0, module: "/build/routes/auth.register-OAHWLT7K.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard": { id: "routes/dashboard", parentId: "root", path: "dashboard", index: void 0, caseSensitive: void 0, module: "/build/routes/dashboard-SE67BSPS.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/dashboard._index": { id: "routes/dashboard._index", parentId: "routes/dashboard", path: void 0, index: !0, caseSensitive: void 0, module: "/build/routes/dashboard._index-5DO4772X.js", imports: ["/build/_shared/chunk-64YSLDFA.js"], hasAction: !0, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/gamification._index": { id: "routes/gamification._index", parentId: "root", path: "gamification", index: !0, caseSensitive: void 0, module: "/build/routes/gamification._index-2IJLNUE6.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals._index": { id: "routes/goals._index", parentId: "root", path: "goals", index: !0, caseSensitive: void 0, module: "/build/routes/goals._index-IGBAIR34.js", imports: void 0, hasAction: !1, hasLoader: !0, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.long-term.new": { id: "routes/goals.long-term.new", parentId: "root", path: "goals/long-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.long-term.new-YYD2I3TW.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/goals.short-term.new": { id: "routes/goals.short-term.new", parentId: "root", path: "goals/short-term/new", index: void 0, caseSensitive: void 0, module: "/build/routes/goals.short-term.new-UH47DMLE.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 }, "routes/tasks.complete.$taskId": { id: "routes/tasks.complete.$taskId", parentId: "root", path: "tasks/complete/:taskId", index: void 0, caseSensitive: void 0, module: "/build/routes/tasks.complete.$taskId-3IUJE7KO.js", imports: void 0, hasAction: !0, hasLoader: !1, hasClientAction: !1, hasClientLoader: !1, hasErrorBoundary: !1 } }, version: "38b8f785", hmr: void 0, url: "/build/manifest-38B8F785.js" };
 
 // server-entry-module:@remix-run/dev/server-build
 var mode = "production", assetsBuildDirectory = "public/build", future = { v3_fetcherPersist: !0, v3_relativeSplatPath: !0, v3_throwAbortReason: !0, v3_routeConfig: !1, v3_singleFetch: !1, v3_lazyRouteDiscovery: !1, unstable_optimizeDeps: !1 }, publicPath = "/build/", entry = { module: entry_server_exports }, routes = {
